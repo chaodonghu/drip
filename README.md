@@ -96,13 +96,17 @@ The hosted app runs the import API as one Vercel function and keeps the library,
 
    The script resizes every model photo to 2048 px on the long edge before it uploads. It also replaces the hosted `library.json` with your local copy, so run it before you import from the hosted app, and again after you add or change model photos.
 
-5. Deploy.
+5. Connect the project to the GitHub repo so every merge to `main` deploys to production and every pull request gets a preview URL.
 
    ```bash
-   vercel deploy --prod
+   vercel git connect
    ```
 
+   Without the connection, deploy by hand with `vercel deploy --prod`.
+
 6. Open the deployed app on your phone, open the import panel, and enter the import secret. The browser remembers it.
+
+Code ships through Git. Data does not: imports made in the hosted app land in Blob directly, and `npm run publish-data` is only needed when you add model photos or import pieces locally and want them hosted. It replaces the hosted library with the local one.
 
 Vercel stops a function after 300 seconds. If a generation step runs out of time, the job shows "Generation timed out. Try regenerating." six minutes after the step started.
 
