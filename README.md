@@ -18,7 +18,7 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 - Detects the garment in a photo and suggests a short product style name, category, colors, and details
 - Extracts a clean cutout on a transparent background
 - Takes several photos of one piece as angles of the same garment
-- Generates a modeled photo of the piece on you, with your face kept out of frame
+- Generates a modeled photo of the piece on you, with a generic face in place of yours
 - Generates an eight view 360 spin of you wearing the piece, with a generic face in place of yours. Drag or use the arrow keys to turn it
 - Draws a different reference photo of you from a pool for every generation, so the look varies between pieces and regenerations
 - Runs locally against a `data/` folder, or on Vercel with a private Blob store so you can import from your phone
