@@ -15,7 +15,7 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 
 ## What it does
 
-- Detects the garment in a photo and suggests a short product style name, category, colors, and details
+- Detects the garment in a photo, looks up the real product name with web search when the brand or design gives it away, and suggests category, colors, and details
 - Extracts a clean cutout on a transparent background
 - Takes several photos of one piece as angles of the same garment
 - Generates a modeled photo of the piece on you, with a generic face in place of yours
