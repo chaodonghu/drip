@@ -2,18 +2,25 @@
 
 # Wardrobe
 
-Your clothes, extracted and organized with gpt-image.
+A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled photo, and a 360 spin of it on you.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-191919?style=flat-square)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-22%2B-191919?style=flat-square)](package.json)
-
-[See the original post →](https://x.com/cdngdev/status/2076812846793650485)
 
 </div>
 
 ![Wardrobe gallery](docs/screenshots/gallery.png)
 
-![Modeled wardrobe editor](docs/screenshots/editor.png)
+![Item viewer with the 360 spin](docs/screenshots/editor.png)
+
+## What it does
+
+- Detects the garment in a photo and suggests a short product style name, category, colors, and details
+- Extracts a clean cutout on a transparent background
+- Takes several photos of one piece as angles of the same garment
+- Generates a modeled photo of the piece on you, with your face kept out of frame
+- Generates an eight view 360 spin of you wearing the piece. Drag or use the arrow keys to turn it
+- Runs locally against a `data/` folder, or on Vercel with a private Blob store so you can import from your phone
 
 ## Quick start
 
@@ -25,43 +32,26 @@ cp .env.example .env
 npm run dev
 ```
 
-⚠️ The importer stays disabled until you add `OPENAI_API_KEY` to `.env` and place a PNG reference photo of yourself at `data/model-reference.png`.
+Add `OPENAI_API_KEY` to `.env` and put a reference photo of yourself at `data/model-reference.png`. The importer stays disabled until both exist. Then open [localhost:5173](http://localhost:5173).
 
-Open [localhost:5173](http://localhost:5173).
+## Importing
 
-## Import with Codex
+Open the import panel and choose one or more photos.
 
-This repo includes two Codex skills: one imports clothes and generates modeled item photos; the other styles complete outfits and generates a modeled lookbook.
+- One photo imports as one piece.
+- Several photos ask whether they are one piece from several angles or separate pieces. One piece takes up to four angles. Remove photos from the selection to get under the limit.
+- Each import pauses for review: confirm the cutout, then the details, then the modeled photo. Each step can be regenerated with a note.
+- Approving the modeled photo starts the 360 spin. It takes about a minute and can be regenerated from the item viewer.
 
-```text
-$import-clothes Import the clothes from ~/Pictures/outfits, create modeled photos, and add them to this wardrobe.
-$generate-outfits Create modeled outfit ideas from my wardrobe.
-```
-
-Open the cloned repo in Codex and run either prompt. The import skill asks for a local model-reference PNG when needed, reviews every cutout and modeled photo, then writes to `data/library.json` and `data/imported/`. The outfit skill asks how many looks to create, then curates, generates, verifies, and saves the complete collection under `data/`.
-
-### For agents
-
-If you are setting up Wardrobe for a user, ask how they want to import their clothes:
-
-- **Codex:** Ask for a folder or camera-roll location and a model-reference PNG, then extract, model, and import the individual pieces by following [the bundled import skill](.agents/skills/import-clothes/SKILL.md). Afterward, offer to create a requested number of modeled looks with [the outfit-generation skill](.agents/skills/generate-outfits/SKILL.md).
-- **Web UI:** Help the user configure their own `OPENAI_API_KEY` and `data/model-reference.png`, then let them import through the app.
-
-## What it does
-
-- Detects every garment in a photo with the OpenAI Responses API
-- Extracts clean product cutouts with the OpenAI Images API
-- Generates an optional modeled editorial preview
-- Keeps originals, jobs, generated images, and the JSON database local in `data/`
-- Supports drag, drop, paste, editing, review, regeneration, and approval
+Everything lives in `data/` when running locally: `library.json`, originals, jobs, and generated images.
 
 ## Configuration
 
 | Variable | Default |
 | --- | --- |
 | `OPENAI_API_KEY` | Required |
-| `OPENAI_VISION_MODEL` | `gpt-5.4-mini` |
-| `OPENAI_IMAGE_MODEL` | `gpt-image-2` |
+| `OPENAI_VISION_MODEL` | `gpt-5.4-mini`. Detection and the image tool host |
+| `OPENAI_IMAGE_MODEL` | `gpt-image-2`. Cutouts, modeled photos, and spins |
 | `OPENAI_IMAGE_QUALITY` | `high` |
 | `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png` |
 | `WARDROBE_DATA_DIR` | `data` |
@@ -69,9 +59,11 @@ If you are setting up Wardrobe for a user, ask how they want to import their clo
 | `WARDROBE_STORAGE` | Unset, which uses `data/`. Set `blob` to use Vercel Blob |
 | `BLOB_READ_WRITE_TOKEN` | Written to `.env.local` by `vercel env pull` |
 
+Newer OpenAI models work by setting the two model variables. The hosted app runs on `gpt-6.1-sol` and `gpt-image-2.5-sunburst`.
+
 ## Deploy to Vercel
 
-The hosted app runs the import API as one Vercel function. It keeps the library, import jobs, and your reference photo in a private Vercel Blob store. Anyone with the URL can view the gallery. Creating, approving, and deleting items needs the import secret.
+The hosted app runs the import API as one Vercel function and keeps the library, import jobs, and your reference photo in a private Vercel Blob store. Anyone with the URL can view the gallery. Creating, approving, regenerating, and deleting items needs the import secret.
 
 `scripts/setup-vercel.sh` runs every step below in one go after `vercel login`. The manual steps follow.
 
@@ -84,7 +76,7 @@ The hosted app runs the import API as one Vercel function. It keeps the library,
 2. Create a private Blob store and connect it to every environment. Connecting the store adds `BLOB_READ_WRITE_TOKEN` to the project.
 
    ```bash
-   vercel blob create-store wardrobe --access private --yes
+   vercel blob create-store wardrobe --access private
    ```
 
 3. Add the OpenAI key and an import secret to Production. Add `OPENAI_VISION_MODEL`, `OPENAI_IMAGE_MODEL`, or `OPENAI_IMAGE_QUALITY` the same way to override the defaults.
@@ -101,7 +93,7 @@ The hosted app runs the import API as one Vercel function. It keeps the library,
    npm run publish-data
    ```
 
-   The script resizes the reference photo to 2048 px on the long edge before it uploads. It also replaces the hosted `library.json` with your local copy, so run it before you import from the hosted app.
+   The script resizes the reference photo to 2048 px on the long edge before it uploads. It also replaces the hosted `library.json` with your local copy, so run it before you import from the hosted app, and again after you change the reference photo.
 
 5. Deploy.
 
@@ -112,6 +104,21 @@ The hosted app runs the import API as one Vercel function. It keeps the library,
 6. Open the deployed app on your phone, open the import panel, and enter the import secret. The browser remembers it.
 
 Vercel stops a function after 300 seconds. If a generation step runs out of time, the job shows "Generation timed out. Try regenerating." six minutes after the step started.
+
+## Import with Codex
+
+The repo also bundles two Codex skills. One imports clothes from a folder and generates modeled photos; the other styles complete outfits into a modeled lookbook.
+
+```text
+$import-clothes Import the clothes from ~/Pictures/outfits, create modeled photos, and add them to this wardrobe.
+$generate-outfits Create modeled outfit ideas from my wardrobe.
+```
+
+Open the repo in Codex and run either prompt. The skills live in [`.agents/skills`](.agents/skills) and write to `data/` the same way the app does.
+
+## Credits
+
+Wardrobe started from [tandpfun/wardrobe](https://github.com/tandpfun/wardrobe) by [Thijs Simonian](https://thijs.net), which introduced the detect, cut out, and model pipeline and the gallery design. See [the original post](https://x.com/cdngdev/status/2076812846793650485). This repo keeps that idea and adds Vercel hosting, phone imports, multi-angle pieces, and the 360 spin.
 
 ## License
 
