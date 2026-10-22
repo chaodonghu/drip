@@ -26,8 +26,8 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 ## Quick start
 
 ```bash
-git clone https://github.com/chaodonghu/wardrobe.git
-cd wardrobe
+git clone https://github.com/chaodonghu/drip.git
+cd drip
 npm install
 cp .env.example .env
 npm run dev
