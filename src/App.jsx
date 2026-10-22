@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Plus, SpinnerGap, Trash, X } from "@phosphor-icons/react";
+import { Check, MagnifyingGlass, Plus, SpinnerGap, Trash, X } from "@phosphor-icons/react";
 import { importAuthHeaders, WardrobeImportFlow } from "./import-flow.jsx";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 
@@ -16,6 +16,51 @@ const TYPES = [
 ];
 
 const TYPE_MAP = Object.fromEntries(TYPES.map((type) => [type.id, type]));
+
+// The gallery view lives in the URL as ?type=<id>&q=<search>, so a link reproduces the same filtered set.
+function readViewFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const type = params.get("type");
+  return { type: type && type !== "all" && TYPE_MAP[type] ? type : "all", query: params.get("q") || "" };
+}
+
+function writeViewToUrl({ type, query }) {
+  const params = new URLSearchParams(window.location.search);
+  if (type === "all") params.delete("type"); else params.set("type", type);
+  if (query.trim()) params.set("q", query.trim()); else params.delete("q");
+  const search = params.toString();
+  const next = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+  if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.replaceState(null, "", next);
+}
+
+// Apostrophes are dropped rather than split on, so "arcteryx" finds Arc'teryx.
+const searchWords = (text) => text.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f'\u2019]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+
+function withinEdits(a, b, limit) {
+  if (Math.abs(a.length - b.length) > limit) return false;
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      rowMin = Math.min(rowMin, current[j]);
+    }
+    if (rowMin > limit) return false;
+    previous = current;
+  }
+  return previous[b.length] <= limit;
+}
+
+// Every search word has to hit some word of the piece: as a substring, or within one edit for words of four letters or more, two for seven or more.
+function matchesSearch(item, query) {
+  const needles = searchWords(query);
+  if (!needles.length) return true;
+  const haystack = searchWords([item.name, ...(item.tags || []), TYPE_MAP[item.part]?.label || ""].join(" "));
+  const joined = haystack.join(" ");
+  const compact = haystack.join("");
+  return needles.every((needle) => joined.includes(needle) || compact.includes(needle) || haystack.some((word) => withinEdits(needle, word, needle.length >= 7 ? 2 : needle.length >= 4 ? 1 : 0)));
+}
 const TYPE_ORDER = Object.fromEntries(TYPES.slice(1).map((type, index) => [type.id, index]));
 const TURNAROUND_VIEWS = ["Front", "Front left", "Left", "Back left", "Back", "Back right", "Right", "Front right"];
 const TURNAROUND_ACTIONS = { ready: "Regenerate", failed: "Try again" };
@@ -631,7 +676,9 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround }) {
 
 export function App() {
   const [items, setItems] = useState([]);
-  const [activeType, setActiveType] = useState("all");
+  const [initialView] = useState(readViewFromUrl);
+  const [activeType, setActiveType] = useState(initialView.type);
+  const [query, setQuery] = useState(initialView.query);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -686,8 +733,10 @@ export function App() {
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
+  useEffect(() => { writeViewToUrl({ type: activeType, query }); }, [activeType, query]);
+
   const visibleItems = useMemo(() => {
-    const filtered = activeType === "all" ? items : items.filter((item) => item.part === activeType);
+    const filtered = items.filter((item) => (activeType === "all" || item.part === activeType) && matchesSearch(item, query));
     return [...filtered].sort((a, b) => {
       if (activeType === "all") {
         const typeDifference = (TYPE_ORDER[a.part] ?? 99) - (TYPE_ORDER[b.part] ?? 99);
@@ -695,7 +744,8 @@ export function App() {
       }
       return a.id.localeCompare(b.id);
     });
-  }, [activeType, items]);
+  }, [activeType, items, query]);
+  const filtering = activeType !== "all" || Boolean(query.trim());
 
   const chooseType = (typeId) => {
     setActiveType(typeId);
@@ -739,7 +789,20 @@ export function App() {
       <main className="gallery-pane">
         <header className="gallery-header">
           <div className="gallery-meta-row">
-            <p className="piece-count">{items.length} {items.length === 1 ? "piece" : "pieces"}</p>
+            <p className="piece-count">{filtering ? `${visibleItems.length} of ${items.length}` : items.length} {items.length === 1 ? "piece" : "pieces"}</p>
+            <label className="gallery-search">
+              <MagnifyingGlass size={15} aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => { setQuery(event.target.value); setSelectedId(null); }}
+                placeholder="Search by name or detail"
+                aria-label="Search pieces by name or detail"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}
+            </label>
           </div>
           <nav className="category-nav" aria-label="Filter wardrobe by item type">
             {TYPES.map((type) => (
@@ -759,6 +822,12 @@ export function App() {
         {error && <p className="status error">{error}</p>}
         {!error && loading && <p className="status">Loading wardrobe</p>}
         {!error && !loading && !items.length && <p className="status empty">Drop, paste, or add a photo to import your first piece.</p>}
+        {!!items.length && !visibleItems.length && (
+          <p className="status empty">
+            No pieces match{query.trim() ? ` “${query.trim()}”` : ""}{activeType !== "all" ? ` in ${TYPE_MAP[activeType].label}` : ""}.
+            {" "}<button type="button" className="status-link" onClick={() => { setQuery(""); setActiveType("all"); }}>Show everything</button>
+          </p>
+        )}
 
         {!!items.length && (
           <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
