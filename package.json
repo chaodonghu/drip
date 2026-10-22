@@ -1,0 +1,29 @@
+{
+  "name": "wardrobe",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A local-first AI wardrobe gallery powered by OpenAI.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "npm run build",
+    "publish-data": "node scripts/publish-data.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/instrument-sans": "^5.2.8",
+    "@phosphor-icons/react": "^2.1.10",
+    "@unpic/react": "^1.0.2",
+    "@vercel/blob": "^2.8.2",
+    "@vercel/functions": "^3.10.2",
+    "@vitejs/plugin-react": "5.0.4",
+    "ipx": "^3.1.1",
+    "openai": "^6.47.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "sharp": "^0.34.5",
+    "vite": "6.4.3"
+  }
+}
