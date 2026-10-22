@@ -1,6 +1,6 @@
 <div align="center">
 
-# Wardrobe
+# Drip
 
 A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled photo, and a 360 spin of it on you.
 
