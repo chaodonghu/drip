@@ -27,7 +27,7 @@ export function createBlobStorage({ token }) {
   }
 
   return {
-    modelReference: "model-reference.png in Blob storage (upload it with npm run publish-data)",
+    modelReference: "models/ in Blob storage (upload them with npm run publish-data)",
     async readJson(key) {
       const bytes = await readBytes(key);
       return bytes === null ? null : JSON.parse(bytes.toString("utf8"));
@@ -43,6 +43,9 @@ export function createBlobStorage({ token }) {
     async removePrefix(prefix) {
       const urls = (await listAll(prefix)).map((blob) => blob.url);
       if (urls.length) await del(urls, auth);
+    },
+    async listModels() {
+      return (await listAll("models/")).map((blob) => blob.pathname).filter((name) => /\.(png|jpe?g|webp)$/i.test(name)).sort();
     },
     async listJobIds() {
       return (await listAll("jobs/"))

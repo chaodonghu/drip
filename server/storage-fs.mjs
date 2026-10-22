@@ -7,11 +7,13 @@ const MODEL_REFERENCE_KEY = "model-reference.png";
 export function createFsStorage({ root = process.cwd(), dataDir = "data", modelReference = "data/model-reference.png" } = {}) {
   const dataRoot = path.resolve(root, dataDir);
   const jobsDir = path.join(dataRoot, "jobs");
+  const modelsDir = path.join(dataRoot, "models");
   const modelReferencePath = path.resolve(root, modelReference);
 
   // library.json and imported/ sit directly under the data dir because the bundled Codex skills write that layout.
   function file(key) {
     if (key === MODEL_REFERENCE_KEY) return modelReferencePath;
+    if (key.startsWith("models/")) return path.join(modelsDir, key.slice("models/".length));
     if (key === "library/library.json") return path.join(dataRoot, "library.json");
     if (key.startsWith("library/")) return path.join(dataRoot, "imported", key.slice("library/".length));
     if (key.startsWith("jobs/")) return path.join(dataRoot, key);
@@ -40,7 +42,7 @@ export function createFsStorage({ root = process.cwd(), dataDir = "data", modelR
   }
 
   return {
-    modelReference,
+    modelReference: `${path.relative(root, modelsDir)}/ (or ${modelReference})`,
     async readJson(key) {
       const text = await readOrNull(key, "utf8");
       return text === null ? null : JSON.parse(text);
@@ -63,6 +65,10 @@ export function createFsStorage({ root = process.cwd(), dataDir = "data", modelR
     },
     async removePrefix(prefix) {
       await rm(file(prefix.replace(/\/$/, "")), { recursive: true, force: true });
+    },
+    async listModels() {
+      const names = await readdir(modelsDir).catch(() => []);
+      return names.filter((name) => /\.(png|jpe?g|webp)$/i.test(name)).sort().map((name) => `models/${name}`);
     },
     async listJobIds() {
       const ids = await readdir(jobsDir).catch(() => []);

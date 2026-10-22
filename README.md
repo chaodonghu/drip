@@ -19,7 +19,8 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 - Extracts a clean cutout on a transparent background
 - Takes several photos of one piece as angles of the same garment
 - Generates a modeled photo of the piece on you, with your face kept out of frame
-- Generates an eight view 360 spin of you wearing the piece. Drag or use the arrow keys to turn it
+- Generates an eight view 360 spin of you wearing the piece, with a generic face in place of yours. Drag or use the arrow keys to turn it
+- Draws a different reference photo of you from a pool for every generation, so the look varies between pieces and regenerations
 - Runs locally against a `data/` folder, or on Vercel with a private Blob store so you can import from your phone
 
 ## Quick start
@@ -32,7 +33,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Add `OPENAI_API_KEY` to `.env` and put a reference photo of yourself at `data/model-reference.png`. The importer stays disabled until both exist. Then open [localhost:5173](http://localhost:5173).
+Add `OPENAI_API_KEY` to `.env` and put a few full-body photos of yourself in `data/models/`. Different outfits and settings give the generations more variety. A single photo at `data/model-reference.png` also works. The importer stays disabled until a key and at least one photo exist. Then open [localhost:5173](http://localhost:5173).
 
 ## Importing
 
@@ -53,7 +54,7 @@ Everything lives in `data/` when running locally: `library.json`, originals, job
 | `OPENAI_VISION_MODEL` | `gpt-5.4-mini`. Detection and the image tool host |
 | `OPENAI_IMAGE_MODEL` | `gpt-image-2`. Cutouts, modeled photos, and spins |
 | `OPENAI_IMAGE_QUALITY` | `high` |
-| `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png` |
+| `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png`. Fallback when `data/models/` is empty |
 | `WARDROBE_DATA_DIR` | `data` |
 | `WARDROBE_IMPORT_SECRET` | Unset. Required on Vercel |
 | `WARDROBE_STORAGE` | Unset, which uses `data/`. Set `blob` to use Vercel Blob |
@@ -86,14 +87,14 @@ The hosted app runs the import API as one Vercel function and keeps the library,
    vercel env add WARDROBE_IMPORT_SECRET production
    ```
 
-4. Pull the Blob token into `.env.local`, then upload your reference photo and your local library.
+4. Pull the Blob token into `.env.local`, then upload your model photos and your local library.
 
    ```bash
    vercel env pull .env.local
    npm run publish-data
    ```
 
-   The script resizes the reference photo to 2048 px on the long edge before it uploads. It also replaces the hosted `library.json` with your local copy, so run it before you import from the hosted app, and again after you change the reference photo.
+   The script resizes every model photo to 2048 px on the long edge before it uploads. It also replaces the hosted `library.json` with your local copy, so run it before you import from the hosted app, and again after you add or change model photos.
 
 5. Deploy.
 

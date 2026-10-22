@@ -18,7 +18,7 @@ const MAX_UPLOAD_IMAGES = 4;
 const TURNAROUND_COLUMNS = 4;
 const TURNAROUND_ROWS = 2;
 // The sheet is keyed like garments are, so the frames sit on whatever surface the viewer gives them.
-const turnaroundPrompt = (chromaKey) => `Create a photographic turnaround sheet of the person in Image 1 wearing the exact garment from Image 2. Eight full-body views of the same person, same relaxed natural standing pose with arms at the sides, head level and a calm neutral expression, same lighting, same scale, evenly spaced at 45 degree steps: front, front-left, left, back-left, back, back-right, right, front-right. Arrange them in two rows of four on a perfectly flat, absolutely uniform solid ${chromaKey} chroma-key background, edge to edge, with thin even gaps of the same ${chromaKey} color between the views. No floor, no shadows, no dividing lines, no text or labels. Use no ${chromaKey} anywhere on the person or the garment. Preserve the person's build, skin tone and proportions and every garment detail including the back of the garment. The person wears no hat or beanie; they have a medium-length flow haircut with natural dark hair.`;
+const turnaroundPrompt = (chromaKey) => `Create a photographic turnaround sheet of the person in Image 1 wearing the exact garment from Image 2. Eight full-body views of the same person, same relaxed natural standing pose with arms at the sides, head level and a calm neutral expression, same lighting, same scale, evenly spaced at 45 degree steps: front, front-left, left, back-left, back, back-right, right, front-right. Arrange them in two rows of four on a perfectly flat, absolutely uniform solid ${chromaKey} chroma-key background, edge to edge, with thin even gaps of the same ${chromaKey} color between the views. No floor, no shadows, no dividing lines, no text or labels. Use no ${chromaKey} anywhere on the person or the garment. Preserve the person's build, height, skin tone and proportions and every garment detail including the back of the garment. Do not reproduce the person's face: give the figure a neutral, generic face with no resemblance to Image 1. The person wears no hat or beanie; they have a medium-length flow haircut with natural dark hair.`;
 
 const jobKey = (id, name) => `jobs/${id}/${name}`;
 const turnaroundFiles = (itemId) => [
@@ -493,15 +493,32 @@ export function createImportApi({ storage, setting, background }) {
   const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
   const importSecret = () => setting("WARDROBE_IMPORT_SECRET").trim();
 
+  // Every full-body photo under models/ is a candidate. The single model-reference.png stays as the fallback.
+  async function listModels() {
+    const pool = await storage.listModels();
+    if (pool.length) return pool;
+    return (await storage.exists(MODEL_REFERENCE_KEY)) ? [MODEL_REFERENCE_KEY] : [];
+  }
+
+  // Each generation draws a fresh reference, so the model varies from piece to piece and across regenerations.
+  async function pickModel() {
+    const pool = await listModels();
+    if (!pool.length) throw new Error(`No model reference found. Add full-body photos of yourself under ${storage.modelReference}.`);
+    const key = pool[Math.floor(Math.random() * pool.length)];
+    const data = await storage.readBytes(key);
+    if (!data) throw new Error(`Model reference ${key} could not be read.`);
+    return { key, data };
+  }
+
   async function setupStatus() {
     const hasApiKey = Boolean(setting("OPENAI_API_KEY").trim());
-    const hasModelReference = await storage.exists(MODEL_REFERENCE_KEY);
+    const hasModelReference = (await listModels()).length > 0;
     const requiresSecret = Boolean(importSecret());
     // A hosted deploy without a secret would let anyone spend the OpenAI key.
     const missingSecret = Boolean(process.env.VERCEL) && !requiresSecret;
     const missing = [
       !hasApiKey && "OPENAI_API_KEY in .env",
-      !hasModelReference && `a PNG photo of yourself at ${storage.modelReference}`,
+      !hasModelReference && `full-body photos of yourself under ${storage.modelReference}`,
       missingSecret && "WARDROBE_IMPORT_SECRET",
     ].filter(Boolean).join(" and ");
     return {
@@ -609,6 +626,7 @@ export function createImportApi({ storage, setting, background }) {
       await saveJob(current);
       let failedAssetUrl = null;
       let chromaKeyUsed = null;
+      let modelUsed = null;
       try {
         const outputName = `${stageName}-${stage.attempts}.png`;
         const key = setting("OPENAI_API_KEY");
@@ -627,9 +645,9 @@ export function createImportApi({ storage, setting, background }) {
         } else {
           const garmentName = current.stages.garment.assetUrl ? assetName(current.stages.garment.assetUrl) : `garment-${current.stages.garment.attempts}.png`;
           const garment = { data: await requireBytes(jobKey(current.id, garmentName)), mime: "image/png", name: "garment.png" };
-          const modelData = await storage.readBytes(MODEL_REFERENCE_KEY);
-          if (!modelData) throw new Error(`Model reference not found at ${storage.modelReference}. Set WARDROBE_MODEL_REFERENCE or add data/model-reference.png.`);
-          const model = { data: modelData, mime: "image/png", name: "model.png" };
+          const picked = await pickModel();
+          modelUsed = picked.key;
+          const model = { data: picked.data, mime: "image/png", name: "model.png" };
           const basePrompt = "Create a professional horizontal 3:2 editorial fashion photograph of the person in Image 1 wearing the exact garment from Image 2. Preserve the person's build, height, skin tone, hair and proportions, but never show the face: pose them turned away from the camera, looking down, or framed so the face is out of frame or fully in shadow. No identifiable facial features. Preserve every garment color, material, fit, construction, graphic, logo and distinctive detail. Keep the complete featured item clearly visible and unobstructed, use understated neutral supporting clothes, realistic anatomy, natural light, authentic fabric, a tasteful real-world setting, and leave environmental space around the model. No text, watermark, product mockup, or synthetic appearance.";
           bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1536x1024", images: [model, garment], prompt: current.stages.modeled.prompt ? `${basePrompt}\nUser regeneration direction: ${current.stages.modeled.prompt}` : basePrompt });
         }
@@ -642,6 +660,7 @@ export function createImportApi({ storage, setting, background }) {
         fresh.stages[stageName].cleanupPreviewUrl = null;
         fresh.stages[stageName].cleanupDiagnostics = null;
         if (chromaKeyUsed) fresh.stages[stageName].chromaKey = chromaKeyUsed;
+        if (modelUsed) fresh.stages[stageName].modelReference = modelUsed;
         fresh.stages[stageName].updatedAt = new Date().toISOString();
         await saveJob(fresh);
       } catch (error) {
@@ -664,11 +683,10 @@ export function createImportApi({ storage, setting, background }) {
       try {
         const key = setting("OPENAI_API_KEY");
         if (!key) throw new Error("OPENAI_API_KEY is not configured");
-        const modelData = await storage.readBytes(MODEL_REFERENCE_KEY);
-        if (!modelData) throw new Error(`Model reference not found at ${storage.modelReference}. Set WARDROBE_MODEL_REFERENCE or add data/model-reference.png.`);
+        const model = await pickModel();
         const garment = await requireBytes(`library/${itemId}-garment.png`);
         const chromaKey = chooseChromaKey((await loadImported()).find((record) => record.id === itemId)?.color);
-        const sheet = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1536x1024", images: [{ data: modelData, mime: "image/png", name: "model.png" }, { data: garment, mime: "image/png", name: "garment.png" }], prompt: turnaroundPrompt(chromaKey) });
+        const sheet = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1536x1024", images: [{ data: model.data, mime: "image/png", name: "model.png" }, { data: garment, mime: "image/png", name: "garment.png" }], prompt: turnaroundPrompt(chromaKey) });
         const keyed = await Promise.all((await sliceTurnaround(sheet)).map(async (frame) => (await processChromaBackground(frame, chromaKey, { frame: false })).bytes));
         const frames = await stabilizeTurnaround(keyed);
         const names = turnaroundFiles(itemId);
@@ -679,6 +697,7 @@ export function createImportApi({ storage, setting, background }) {
         const record = await patchRecord(itemId, () => ({ turnaround: turnaroundState("ready", {
           frames: frameNames.map((name) => `${LIBRARY_ASSET_ROOT}/${name}${version}`),
           sheet: `${LIBRARY_ASSET_ROOT}/${sheetName}${version}`,
+          modelReference: model.key,
         }) }));
         if (!record) await Promise.all(names.map((name) => storage.remove(`library/${name}`)));
       } catch (error) {
