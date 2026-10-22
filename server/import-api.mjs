@@ -86,7 +86,7 @@ function normalizeMetadata(value = {}) {
   const color = typeof metadata.color === "string" && HEX_COLOR.test(metadata.color) ? metadata.color.toLowerCase() : "#d8d0c2";
   const secondaryColor = typeof metadata.secondaryColor === "string" && HEX_COLOR.test(metadata.secondaryColor) ? metadata.secondaryColor.toLowerCase() : null;
   return {
-    name: typeof metadata.name === "string" ? metadata.name.trim().slice(0, 120) || "New piece" : "New piece",
+    name: cleanName(metadata.name),
     part: PARTS.has(metadata.part) ? metadata.part : "upperbody",
     color,
     secondaryColor,
@@ -140,6 +140,13 @@ function chooseChromaKey(primary = "#808080") {
     return distance(b) - distance(a);
   })[0];
   return `#${selected.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+// Lookups sometimes append notes in brackets or a colorway after a dash. The name keeps only the product title.
+export function cleanName(value) {
+  if (typeof value !== "string") return "New piece";
+  const cleaned = value.replace(/\s*[([{][^)\]}]*[)\]}]?/g, " ").replace(/\s+[-\u2013|]\s+.*$/, "").replace(/\s+/g, " ").trim();
+  return cleaned.slice(0, 80) || "New piece";
 }
 
 export function buildGarmentPrompt(metadata = {}, chromaKey = "#00ff00", imageCount = 1) {
@@ -473,7 +480,7 @@ export async function openAIAnalyze({ key, baseUrl, model, image, mime, singleGa
     body: JSON.stringify({
       model,
       input: [{ role: "user", content: [
-        { type: "input_text", text: `Identify every distinct wearable clothing item visible in this image. A photo may show one isolated garment or a person wearing several items. Return one record per actual item that should enter a wardrobe. Ignore the person's body and non-wearable background objects. For each item, include a tight bounding box around only that item using integer coordinates normalized to a 1000 by 1000 image: x and y are the top-left corner, followed by width and height. Boxes may overlap when garments overlap, but each box must focus on one distinct item. Use only these category ids: upperbody, wholebody_up, lowerbody, accessories_up, shoes. For the display name, identify the real product when you can: read the brand from logos, labels or printed text, note the distinctive design details, and use web search to confirm the official product name, for example Arc'teryx Gamma MX Hoody or Crocs Pollex Clog by Salehe Bembury. Use that official name only when the brand is visible or the design is unmistakable and the search confirms it. Otherwise fall back to a short descriptive title of two to four words like Black Cargo Pants. Never invent a product name. Also give the primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags.${singleGarment ? " Every photo in this upload shows the same single garment from a different angle, and this is one of them, so return exactly one item for that garment." : ""}` },
+        { type: "input_text", text: `Identify every distinct wearable clothing item visible in this image. A photo may show one isolated garment or a person wearing several items. Return one record per actual item that should enter a wardrobe. Ignore the person's body and non-wearable background objects. For each item, include a tight bounding box around only that item using integer coordinates normalized to a 1000 by 1000 image: x and y are the top-left corner, followed by width and height. Boxes may overlap when garments overlap, but each box must focus on one distinct item. Use only these category ids: upperbody, wholebody_up, lowerbody, accessories_up, shoes. For the display name, identify the real product when you can: read the brand from logos, labels or printed text, note the distinctive design details, and use web search to confirm the official product name, for example Arc'teryx Gamma MX Hoody or Crocs Pollex Clog by Salehe Bembury. Use that official name only when the brand is visible or the design is unmistakable and the search confirms it. Otherwise fall back to a short descriptive title of two to four words like Black Cargo Pants. Never invent a product name. The name is the title only: no notes, parentheses, brackets, colorway, size or source after it. Also give the primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags.${singleGarment ? " Every photo in this upload shows the same single garment from a different angle, and this is one of them, so return exactly one item for that garment." : ""}` },
         { type: "input_image", image_url: `data:${mime};base64,${image.toString("base64")}` },
       ] }],
       tools: [{ type: "web_search" }],
