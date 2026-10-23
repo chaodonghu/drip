@@ -44,6 +44,7 @@ Open the import panel and choose one or more photos.
 - Several photos ask whether they are one piece from several angles or separate pieces. One piece takes up to four angles. Remove photos from the selection to get under the limit.
 - Each import pauses for review: confirm the crop, then the cutout and its details. The cutout can be regenerated with a note.
 - Approving the cutout saves the piece and starts the 360 spin. It takes about a minute and can be regenerated from the item viewer.
+- OpenAI refuses to redraw some licensed characters and logos, even on clothing you own. A piece with that artwork fails at the cutout step with a message saying so, and the only option is to remove it from the queue.
 
 Everything lives in `data/` when running locally: `library.json`, originals, jobs, and generated images.
 
