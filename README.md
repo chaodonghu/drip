@@ -9,7 +9,7 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout and a 360 sp
 
 </div>
 
-![Drip gallery with seven pieces](docs/screenshots/gallery.png)
+![Drip gallery with twelve pieces, categories and search in a left rail](docs/screenshots/gallery.png)
 
 ![Item viewer with the 360 spin](docs/screenshots/editor.png)
 
