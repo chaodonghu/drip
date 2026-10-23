@@ -9,7 +9,7 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 
 </div>
 
-![Wardrobe gallery](docs/screenshots/gallery.png)
+![Drip gallery with seven pieces](docs/screenshots/gallery.png)
 
 ![Item viewer with the 360 spin](docs/screenshots/editor.png)
 
