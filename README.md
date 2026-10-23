@@ -2,7 +2,7 @@
 
 # Drip
 
-A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled photo, and a 360 spin of it on you.
+A personal wardrobe gallery. Photograph a piece, get a clean cutout and a 360 spin of it on you.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-191919?style=flat-square)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-22%2B-191919?style=flat-square)](package.json)
@@ -18,7 +18,6 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 - Detects the garment in a photo, looks up the real product name with web search when the brand or design gives it away, and suggests category, colors, and details
 - Extracts a clean cutout on a transparent background
 - Takes several photos of one piece as angles of the same garment
-- Generates a modeled photo of the piece on you, with a generic face in place of yours
 - Generates an eight view 360 spin of you wearing the piece, with a generic face in place of yours. Drag or use the arrow keys to turn it
 - Draws a different reference photo of you from a pool for every generation, so the look varies between pieces and regenerations
 - Searches the gallery by name, detail or category with typo tolerance, and keeps the search and category in the URL so a link opens the same view
@@ -43,8 +42,8 @@ Open the import panel and choose one or more photos.
 
 - One photo imports as one piece.
 - Several photos ask whether they are one piece from several angles or separate pieces. One piece takes up to four angles. Remove photos from the selection to get under the limit.
-- Each import pauses for review: confirm the cutout, then the details, then the modeled photo. Each step can be regenerated with a note.
-- Approving the modeled photo starts the 360 spin. It takes about a minute and can be regenerated from the item viewer.
+- Each import pauses for review: confirm the crop, then the cutout and its details. The cutout can be regenerated with a note.
+- Approving the cutout saves the piece and starts the 360 spin. It takes about a minute and can be regenerated from the item viewer.
 
 Everything lives in `data/` when running locally: `library.json`, originals, jobs, and generated images.
 
@@ -62,7 +61,7 @@ Editing is tied to the import secret. Open the import panel and enter it once, a
 | --- | --- |
 | `OPENAI_API_KEY` | Required |
 | `OPENAI_VISION_MODEL` | `gpt-5.4-mini`. Detection and the image tool host |
-| `OPENAI_IMAGE_MODEL` | `gpt-image-2`. Cutouts, modeled photos, and spins |
+| `OPENAI_IMAGE_MODEL` | `gpt-image-2`. Cutouts and spins |
 | `OPENAI_IMAGE_QUALITY` | `high` |
 | `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png`. Fallback when `data/models/` is empty |
 | `WARDROBE_DATA_DIR` | `data` |
