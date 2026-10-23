@@ -844,9 +844,7 @@ export function App() {
 
         {error && <p className="status error">{error}</p>}
         {!error && loading && (
-          <section className="gallery-grid gallery-skeleton" aria-label="Loading wardrobe" aria-busy="true">
-            {Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton-tile" style={{ animationDelay: `${index * 90}ms` }} />)}
-          </section>
+          <div className="gallery-skeleton" role="status" aria-label="Loading wardrobe" aria-busy="true" />
         )}
         {!error && !loading && !items.length && <p className="status empty">Drop, paste, or add a photo to import your first piece.</p>}
         {!!items.length && !visibleItems.length && (
