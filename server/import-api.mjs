@@ -8,7 +8,7 @@ const ASSET_ROOT = "/api/import/assets";
 const LIBRARY_ASSET_ROOT = "/api/import/library";
 const LIBRARY_KEY = "library/library.json";
 const MODEL_REFERENCE_KEY = "model-reference.png";
-const STAGES = new Set(["crop", "garment", "modeled"]);
+const STAGES = new Set(["crop", "garment"]);
 const DECISIONS = new Set(["approve", "reject"]);
 const PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes"]);
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
@@ -423,6 +423,14 @@ async function openAIFetch(url, options) {
   }
 }
 
+function describeImageFailure(response) {
+  const failed = response.output?.find((item) => item.type === "image_generation_call" && item.error);
+  if (failed?.error?.code === "moderation_blocked") {
+    return "OpenAI's safety system declined to draw this image. That usually means the artwork is a protected character or brand, which the image model will not reproduce.";
+  }
+  return failed?.error?.message || response.output_text?.trim() || "OpenAI response did not contain image data";
+}
+
 async function openAIEdit({ key, baseUrl, responseModel, imageModel, prompt, images, size, background, quality }) {
   const client = new OpenAI({ apiKey: key, baseURL: baseUrl, maxRetries: 2, timeout: 10 * 60 * 1000 });
   const content = [{ type: "input_text", text: prompt }];
@@ -457,7 +465,7 @@ async function openAIEdit({ key, baseUrl, responseModel, imageModel, prompt, ima
         if (event.type === "response.output_item.done" && event.item.type === "image_generation_call") encoded = event.item.result;
         if (event.type === "response.completed") {
           encoded ||= event.response.output?.find((item) => item.type === "image_generation_call")?.result;
-          if (!encoded) terminalError = event.response.output_text?.trim() || "OpenAI response did not contain image data";
+          if (!encoded) terminalError = describeImageFailure(event.response);
         }
         if (event.type === "response.failed") terminalError = event.response.error?.message || "OpenAI image request failed";
       }
@@ -584,7 +592,7 @@ export function createImportApi({ storage, setting, background }) {
       await storage.writeBytes(jobKey(id, cropFile), await cropDetectedItem(primary, metadata.boundingBox), "image/png");
       const now = new Date().toISOString();
       const cropStage = { ...stageState(), status: "review", assetUrl: `${ASSET_ROOT}/${id}/${cropFile}`, updatedAt: now };
-      const job = { id, status: "active", metadata, stages: { crop: cropStage, garment: stageState(), modeled: stageState() }, createdAt: now, updatedAt: now, internal: { originalFile: sourceFiles[0], sources: sourceFiles.map((file) => ({ file })), cropFile, originalMime: "image/png" } };
+      const job = { id, status: "active", metadata, stages: { crop: cropStage, garment: stageState() }, createdAt: now, updatedAt: now, internal: { originalFile: sourceFiles[0], sources: sourceFiles.map((file) => ({ file })), cropFile, originalMime: "image/png" } };
       job.originalAssetUrl = `${ASSET_ROOT}/${id}/${sourceFiles[0]}`;
       job.sourceAssetUrls = sourceFiles.map((file) => `${ASSET_ROOT}/${id}/${file}`);
       await saveJob(job); jobs.push(publicJob(job));
@@ -592,18 +600,11 @@ export function createImportApi({ storage, setting, background }) {
     return jobs;
   }
 
-  async function persistImported(job, includeModeled = false) {
+  async function persistImported(job) {
     const id = `import-${job.id}`;
     const garmentName = `${id}-garment.png`;
     const garmentSource = job.stages.garment.assetUrl ? assetName(job.stages.garment.assetUrl) : `garment-${job.stages.garment.attempts}.png`;
     await storage.writeBytes(`library/${garmentName}`, await requireBytes(jobKey(job.id, garmentSource)), "image/png");
-    let modeledImage = null;
-    if (includeModeled) {
-      const modeledName = `${id}-modeled.png`;
-      const modeledSource = job.stages.modeled.assetUrl ? assetName(job.stages.modeled.assetUrl) : `modeled-${job.stages.modeled.attempts}.png`;
-      await storage.writeBytes(`library/${modeledName}`, await requireBytes(jobKey(job.id, modeledSource)), "image/png");
-      modeledImage = `${LIBRARY_ASSET_ROOT}/${modeledName}`;
-    }
     const metadata = job.metadata || {};
     const records = await loadImported();
     const existing = records.find((record) => record.id === id);
@@ -617,7 +618,6 @@ export function createImportApi({ storage, setting, background }) {
       tags: Array.isArray(metadata.tags) ? metadata.tags : [],
       image: `${LIBRARY_ASSET_ROOT}/${garmentName}`,
       thumbnail: `${LIBRARY_ASSET_ROOT}/${garmentName}`,
-      modeledImage: modeledImage || existing?.modeledImage || null,
       importJobId: job.id,
       ...(existing?.turnaround && { turnaround: existing.turnaround }),
     };
@@ -637,31 +637,20 @@ export function createImportApi({ storage, setting, background }) {
       await saveJob(current);
       let failedAssetUrl = null;
       let chromaKeyUsed = null;
-      let modelUsed = null;
       try {
         const outputName = `${stageName}-${stage.attempts}.png`;
         const key = setting("OPENAI_API_KEY");
         if (!key) throw new Error("OPENAI_API_KEY is not configured");
         let bytes;
-        if (stageName === "garment") {
-          const sourceFiles = [current.internal.cropFile || current.internal.originalFile, ...(current.internal.sources || []).slice(1).map((source) => source.file)];
-          const images = await Promise.all(sourceFiles.map(async (name) => ({ data: await requireBytes(jobKey(current.id, name)), mime: "image/png", name })));
-          chromaKeyUsed = chooseChromaKey(current.metadata.color);
-          const basePrompt = buildGarmentPrompt(current.metadata, chromaKeyUsed, images.length);
-          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images, prompt: current.stages.garment.prompt ? `${basePrompt}\nUser regeneration direction: ${current.stages.garment.prompt}` : basePrompt });
-          const rawName = `${stageName}-${stage.attempts}-source.png`;
-          await storage.writeBytes(jobKey(current.id, rawName), bytes, "image/png");
-          failedAssetUrl = `${ASSET_ROOT}/${current.id}/${rawName}`;
-          bytes = await removeChromaBackground(bytes, chromaKeyUsed);
-        } else {
-          const garmentName = current.stages.garment.assetUrl ? assetName(current.stages.garment.assetUrl) : `garment-${current.stages.garment.attempts}.png`;
-          const garment = { data: await requireBytes(jobKey(current.id, garmentName)), mime: "image/png", name: "garment.png" };
-          const picked = await pickModel();
-          modelUsed = picked.key;
-          const model = { data: picked.data, mime: "image/png", name: "model.png" };
-          const basePrompt = "Create a professional horizontal 3:2 editorial fashion photograph of the person in Image 1 wearing the exact garment from Image 2. Preserve the person's build, height, skin tone, hair and proportions. Do not reproduce the person's face: give the model a neutral, generic face with no resemblance to Image 1, head level in a relaxed natural stance, looking at the camera or naturally off to one side, never looking down or hiding the face. Preserve every garment color, material, fit, construction, graphic, logo and distinctive detail. Keep the complete featured item clearly visible and unobstructed, use understated neutral supporting clothes, realistic anatomy, natural light, authentic fabric, a tasteful real-world setting, and leave environmental space around the model. No text, watermark, product mockup, or synthetic appearance.";
-          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1536x1024", images: [model, garment], prompt: current.stages.modeled.prompt ? `${basePrompt}\nUser regeneration direction: ${current.stages.modeled.prompt}` : basePrompt });
-        }
+        const sourceFiles = [current.internal.cropFile || current.internal.originalFile, ...(current.internal.sources || []).slice(1).map((source) => source.file)];
+        const images = await Promise.all(sourceFiles.map(async (name) => ({ data: await requireBytes(jobKey(current.id, name)), mime: "image/png", name })));
+        chromaKeyUsed = chooseChromaKey(current.metadata.color);
+        const basePrompt = buildGarmentPrompt(current.metadata, chromaKeyUsed, images.length);
+        bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images, prompt: current.stages.garment.prompt ? `${basePrompt}\nUser regeneration direction: ${current.stages.garment.prompt}` : basePrompt });
+        const rawName = `${stageName}-${stage.attempts}-source.png`;
+        await storage.writeBytes(jobKey(current.id, rawName), bytes, "image/png");
+        failedAssetUrl = `${ASSET_ROOT}/${current.id}/${rawName}`;
+        bytes = await removeChromaBackground(bytes, chromaKeyUsed);
         await storage.writeBytes(jobKey(current.id, outputName), bytes, "image/png");
         const fresh = await loadJob(current.id);
         if (!fresh?.stages?.[stageName]) return;
@@ -671,7 +660,6 @@ export function createImportApi({ storage, setting, background }) {
         fresh.stages[stageName].cleanupPreviewUrl = null;
         fresh.stages[stageName].cleanupDiagnostics = null;
         if (chromaKeyUsed) fresh.stages[stageName].chromaKey = chromaKeyUsed;
-        if (modelUsed) fresh.stages[stageName].modelReference = modelUsed;
         fresh.stages[stageName].updatedAt = new Date().toISOString();
         await saveJob(fresh);
       } catch (error) {
@@ -807,7 +795,7 @@ export function createImportApi({ storage, setting, background }) {
     if (url.pathname === API_ROOT && request.method === "GET") {
       const ids = await storage.listJobIds();
       const loadedJobs = (await Promise.all(ids.map((id) => loadJob(id)))).filter(Boolean);
-      const hiddenJobs = loadedJobs.filter((job) => job.status === "complete" || job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected" || job.stages.modeled.status === "rejected");
+      const hiddenJobs = loadedJobs.filter((job) => job.status === "complete" || job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected");
       await Promise.all(hiddenJobs.map((job) => removeJob(job.id)));
       const jobs = loadedJobs.filter((job) => !hiddenJobs.includes(job)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       await Promise.all(jobs.map(failStuckStages));
@@ -857,7 +845,7 @@ export function createImportApi({ storage, setting, background }) {
       await saveJob(job);
       return json(200, publicJob(job));
     }
-    const stageMatch = action.match(/^stages\/(crop|garment|modeled)\/(approve|reject|regenerate)$/);
+    const stageMatch = action.match(/^stages\/(crop|garment)\/(approve|reject|regenerate)$/);
     if (stageMatch && request.method === "POST") {
       const [, stageName, decision] = stageMatch;
       if (!STAGES.has(stageName)) throw Object.assign(new Error("Invalid stage"), { status: 400 });
@@ -880,12 +868,12 @@ export function createImportApi({ storage, setting, background }) {
       job.stages[stageName].error = null;
       job.stages[stageName].updatedAt = new Date().toISOString();
       const startGarment = stageName === "crop" && decision === "approve" && job.stages.garment.status === "pending";
-      const startModeled = stageName === "garment" && decision === "approve" && job.stages.modeled.status === "pending";
-      if (stageName === "modeled" && decision === "approve") job.status = "complete";
+      const finish = stageName === "garment" && decision === "approve";
+      if (finish) job.status = "complete";
       await saveJob(job);
-      if (decision === "approve" && stageName !== "crop") {
+      if (finish) {
         try {
-          await persistImported(job, stageName === "modeled");
+          await persistImported(job);
         } catch (error) {
           job.stages[stageName].status = previousStatus;
           job.stages[stageName].decision = previousDecision;
@@ -893,14 +881,11 @@ export function createImportApi({ storage, setting, background }) {
           await saveJob(job);
           throw error;
         }
-      }
-      if (stageName === "modeled" && decision === "approve") {
         // persistImported already saved the piece. If this fails, the viewer offers to generate the 360 view instead.
         await startTurnaround(`import-${job.id}`).catch(() => {});
       }
       if (decision === "reject") await removeJob(job.id);
       if (startGarment) background(generate(job, "garment"));
-      if (startModeled) background(generate(job, "modeled"));
       const response = publicJob(job);
       if (job.status === "complete") await removeJob(job.id);
       return json(200, response);
@@ -930,21 +915,23 @@ export function createImportApi({ storage, setting, background }) {
     for (const id of await storage.listJobIds()) {
       const job = await loadJob(id);
       if (!job) continue;
-      if (job.status === "complete") {
-        try {
-          await persistImported(job, true);
-          await removeJob(job.id);
-        } catch {
-          job.status = "active";
-          job.stages.modeled.status = "review";
-          job.stages.modeled.decision = null;
-          job.stages.modeled.error = null;
-          await saveJob(job);
-        }
+      if (job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected") {
+        await removeJob(job.id);
         continue;
       }
-      if (job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected" || job.stages.modeled.status === "rejected") {
-        await removeJob(job.id);
+      // Jobs from before the modeled-photo step was removed can sit with an approved cutout and nothing after it.
+      if (job.status === "complete" || job.stages.garment.status === "approved") {
+        try {
+          const record = await persistImported(job);
+          await removeJob(job.id);
+          if (!record.turnaround) await startTurnaround(record.id).catch(() => {});
+        } catch {
+          job.status = "active";
+          job.stages.garment.status = "review";
+          job.stages.garment.decision = null;
+          job.stages.garment.error = null;
+          await saveJob(job);
+        }
         continue;
       }
       if (job.stages.crop && job.stages.crop.status !== "approved") continue;
@@ -952,10 +939,6 @@ export function createImportApi({ storage, setting, background }) {
         job.stages.garment.status = "pending";
         await saveJob(job);
         background(generate(job, "garment"));
-      } else if (job.stages.garment.status === "approved" && ["pending", "processing", "queued"].includes(job.stages.modeled.status)) {
-        job.stages.modeled.status = "pending";
-        await saveJob(job);
-        background(generate(job, "modeled"));
       }
     }
   }

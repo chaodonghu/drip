@@ -491,7 +491,6 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, can
   const [shaking, setShaking] = useState(false);
   const [closeBlocked, setCloseBlocked] = useState(false);
   const type = TYPE_MAP[item.part]?.singular || "Wardrobe item";
-  const hasModeledImage = Boolean(item.modeledImage);
 
   const isDirty = useMemo(() => {
     const normalizedTags = (tags) => tags.map((tag) => tag.trim()).filter(Boolean);
@@ -620,32 +619,19 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, can
   return (
     <div className="viewer-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
     <div className="viewer-entry">
-    <aside className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`} role="dialog" aria-modal="true" aria-label="Selected wardrobe item">
+    <aside className={`viewer editing has-spin${shaking ? " shake" : ""}`} role="dialog" aria-modal="true" aria-label="Selected wardrobe item">
       <button className="viewer-icon-close" type="button" onClick={requestClose} aria-label="Close viewer" ref={closeButtonRef}>
         <X size={24} weight="light" aria-hidden="true" />
       </button>
 
-      {hasModeledImage ? (
-        <SpinHero
-          turnaround={item.turnaround}
-          label={`${draft.name || type} 360 view`}
-          sampling={sampling}
-          garmentArtwork={garmentArtwork}
-        />
-      ) : (
-        <>
-          <div className="viewer-heading">
-            <div>
-              <h2>{draft.name || TYPE_MAP[draft.part]?.singular}</h2>
-            </div>
-          </div>
-          {garmentArtwork}
-        </>
-      )}
+      <SpinHero
+        turnaround={item.turnaround}
+        label={`${draft.name || type} 360 view`}
+        sampling={sampling}
+        garmentArtwork={garmentArtwork}
+      />
 
-      {hasModeledImage && (
-        <TurnaroundPanel turnaround={item.turnaround} onGenerate={() => onGenerateTurnaround(item.id)} canEdit={canEdit} />
-      )}
+      <TurnaroundPanel turnaround={item.turnaround} onGenerate={() => onGenerateTurnaround(item.id)} canEdit={canEdit} />
 
       {!canEdit && (
         <div className="viewer-details">
@@ -821,13 +807,6 @@ export function App() {
     setItems((current) => current.some((item) => item.id === newItem.id) ? current : [...current, newItem]);
   }, []);
 
-  const attachImportedModeledImage = useCallback((jobId, modeledImage) => {
-    const id = `import-${jobId}`;
-    // The server starts the 360 view on approval. Polling replaces this with the stored state.
-    const turnaround = { status: "processing", frames: [], sheet: null, error: null, updatedAt: new Date().toISOString() };
-    setItems((current) => current.map((item) => item.id === id ? { ...item, modeledImage, turnaround } : item));
-  }, []);
-
   return (
     <div className={`app-shell${selectedItem ? " has-selection" : ""}`}>
       <main className="gallery-pane">
@@ -893,7 +872,7 @@ export function App() {
 
       {toast && <div className="toast" role="status" key={toast.key}>{toast.text}</div>}
       {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateTurnaround={generateTurnaround} canEdit={canEdit} />}
-      <WardrobeImportFlow onGarmentApproved={addImportedItem} onModeledApproved={attachImportedModeledImage} />
+      <WardrobeImportFlow onGarmentApproved={addImportedItem} />
     </div>
   );
 }
