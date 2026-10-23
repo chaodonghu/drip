@@ -221,9 +221,10 @@ button { font: inherit; }
   background: rgba(25, 25, 25, .08);
 }
 
-.skeleton-tile {
-  width: 100%;
-  aspect-ratio: .78;
+.gallery-skeleton {
+  margin: 43px 52px 70px;
+  height: calc(100vh - 316px);
+  min-height: 220px;
   background: linear-gradient(100deg, rgba(25, 25, 25, .05) 35%, rgba(25, 25, 25, .1) 50%, rgba(25, 25, 25, .05) 65%);
   background-size: 300% 100%;
   animation: skeleton-shimmer 1.6s ease-in-out infinite;
@@ -994,6 +995,7 @@ button { font: inherit; }
 @media (max-width: 1180px) {
   .gallery-header { padding-inline: 34px; }
   .gallery-grid { padding-inline: 32px; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap-inline: 18px; }
+  .gallery-skeleton { margin-inline: 32px; }
   .category-nav { max-width: 100%; }
   .viewer { padding-inline: 30px; }
   .has-spin .viewer-details { padding-inline: 30px; }
@@ -1009,6 +1011,7 @@ button { font: inherit; }
     gap: 18px 14px;
     padding: 30px 20px 50px;
   }
+  .gallery-skeleton { margin: 30px 20px 50px; height: calc(100vh - 300px); }
   .gallery-item { padding: 5px; }
   .viewer-overlay { background: rgba(25, 24, 22, .34); }
   .viewer-entry { width: 100%; height: 100dvh; }
@@ -1043,6 +1046,7 @@ button { font: inherit; }
     gap: 12px 8px;
     padding: 22px 12px 40px;
   }
+  .gallery-skeleton { margin: 22px 12px 40px; height: calc(100vh - 280px); }
   .gallery-item { aspect-ratio: .72; }
   .viewer { padding: max(24px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom)); }
   .spin-hero { flex-basis: 360px; height: 360px; }
@@ -1065,7 +1069,7 @@ button { font: inherit; }
   .gallery-item img,
   .category-nav button::after,
   .turnaround-dots span { transition: none; }
-  .skeleton-tile,
+  .gallery-skeleton,
   .toast { animation: none; }
   .viewer-overlay,
   .viewer-entry { animation: none; }
