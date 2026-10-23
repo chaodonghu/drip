@@ -1,7 +1,7 @@
 {
-  "name": "Open Wardrobe",
-  "short_name": "Wardrobe",
-  "description": "A local-first AI wardrobe gallery.",
+  "name": "Drip",
+  "short_name": "Drip",
+  "description": "A personal wardrobe gallery with AI cutouts, modeled photos and 360 spins.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

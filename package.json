@@ -2,7 +2,7 @@
   "name": "wardrobe",
   "version": "1.0.0",
   "private": true,
-  "description": "A local-first AI wardrobe gallery powered by OpenAI.",
+  "description": "A personal wardrobe gallery with AI cutouts, modeled photos and 360 spins.",
   "license": "MIT",
   "type": "module",
   "scripts": {
