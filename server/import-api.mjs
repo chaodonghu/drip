@@ -17,8 +17,20 @@ const UPLOAD_MODES = new Set(["angles", "separate"]);
 const MAX_UPLOAD_IMAGES = 4;
 const TURNAROUND_COLUMNS = 4;
 const TURNAROUND_ROWS = 2;
+const HEADWEAR = /\b(cap|hat|beanie|bucket|visor|toque|balaclava|headband|snapback|fitted)\b/i;
+
+export function isHeadwear(record = {}) {
+  return record.part === "accessories_up" && HEADWEAR.test([record.name, ...(record.tags || [])].join(" "));
+}
+
 // The sheet is keyed like garments are, so the frames sit on whatever surface the viewer gives them.
-const turnaroundPrompt = (chromaKey) => `Create a photographic turnaround sheet of the person in Image 1 wearing the exact garment from Image 2. Eight full-body views of the same person, same relaxed natural standing pose with arms at the sides, head level and a calm neutral expression, same lighting, same scale, evenly spaced at 45 degree steps: front, front-left, left, back-left, back, back-right, right, front-right. Arrange them in two rows of four on a perfectly flat, absolutely uniform solid ${chromaKey} chroma-key background, edge to edge, with thin even gaps of the same ${chromaKey} color between the views. No floor, no shadows, no dividing lines, no text or labels. Use no ${chromaKey} anywhere on the person or the garment. Preserve the person's build, height, skin tone and proportions and every garment detail including the back of the garment. Do not reproduce the person's face: give the figure a neutral, generic face with no resemblance to Image 1. The person wears no hat or beanie; they have a medium-length flow haircut with natural dark hair.`;
+// The reference photos show the person in a hat, so the hair line stops it from leaking into every spin.
+export const turnaroundPrompt = (chromaKey, record = {}) => {
+  const head = isHeadwear(record)
+    ? `The person wears the exact headwear from Image 2 on their head in every view, brim forward, with natural dark hair showing beneath it; wear nothing else on the head. The rest of the outfit is understated and neutral.`
+    : `The person wears no hat or beanie; they have a medium-length flow haircut with natural dark hair.`;
+  return `Create a photographic turnaround sheet of the person in Image 1 wearing the exact garment from Image 2. Eight full-body views of the same person, same relaxed natural standing pose with arms at the sides, head level and a calm neutral expression, same lighting, same scale, evenly spaced at 45 degree steps: front, front-left, left, back-left, back, back-right, right, front-right. Arrange them in two rows of four on a perfectly flat, absolutely uniform solid ${chromaKey} chroma-key background, edge to edge, with thin even gaps of the same ${chromaKey} color between the views. No floor, no shadows, no dividing lines, no text or labels. Use no ${chromaKey} anywhere on the person or the garment. Preserve the person's build, height, skin tone and proportions and every garment detail including the back of the garment. Do not reproduce the person's face: give the figure a neutral, generic face with no resemblance to Image 1. ${head}`;
+};
 
 const jobKey = (id, name) => `jobs/${id}/${name}`;
 const turnaroundFiles = (itemId) => [
@@ -686,8 +698,9 @@ export function createImportApi({ storage, setting, background }) {
         if (!key) throw new Error("OPENAI_API_KEY is not configured");
         const model = await pickModel();
         const garment = await requireBytes(`library/${itemId}-garment.png`);
-        const chromaKey = chooseChromaKey((await loadImported()).find((record) => record.id === itemId)?.color);
-        const sheet = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1536x1024", images: [{ data: model.data, mime: "image/png", name: "model.png" }, { data: garment, mime: "image/png", name: "garment.png" }], prompt: turnaroundPrompt(chromaKey) });
+        const piece = (await loadImported()).find((item) => item.id === itemId);
+        const chromaKey = chooseChromaKey(piece?.color);
+        const sheet = await openAIEdit({ key, baseUrl: apiBaseUrl(), responseModel: setting("OPENAI_IMAGE_TOOL_MODEL", setting("OPENAI_VISION_MODEL", "gpt-5.4-mini")), imageModel: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1536x1024", images: [{ data: model.data, mime: "image/png", name: "model.png" }, { data: garment, mime: "image/png", name: "garment.png" }], prompt: turnaroundPrompt(chromaKey, piece) });
         const keyed = await Promise.all((await sliceTurnaround(sheet)).map(async (frame) => (await processChromaBackground(frame, chromaKey, { frame: false })).bytes));
         const frames = await stabilizeTurnaround(keyed);
         const names = turnaroundFiles(itemId);
