@@ -844,12 +844,28 @@ export function App() {
           {!error && loading && (
             <div className="gallery-skeleton" role="status" aria-label="Loading wardrobe" aria-busy="true" />
           )}
-          {!error && !loading && !items.length && <p className="status empty">Drop, paste, or add a photo to import your first piece.</p>}
+          {!error && !loading && !items.length && (
+            <div className="gallery-empty">
+              <p className="gallery-empty__title">Your wardrobe is empty.</p>
+              <p className="gallery-empty__hint">Drop a photo here, paste one, or use the button in the corner to import your first piece.</p>
+            </div>
+          )}
           {!!items.length && !visibleItems.length && (
-            <p className="status empty">
-              No pieces match{query.trim() ? ` “${query.trim()}”` : ""}{activeType !== "all" ? ` in ${TYPE_MAP[activeType].label}` : ""}.
-              {" "}<button type="button" className="status-link" onClick={() => { setQuery(""); setActiveType("all"); }}>Show everything</button>
-            </p>
+            <div className="gallery-empty">
+              <p className="gallery-empty__title">
+                {query.trim()
+                  ? <>No pieces match “{query.trim()}”{activeType !== "all" ? ` in ${TYPE_MAP[activeType].label}` : ""}.</>
+                  : <>Nothing in {TYPE_MAP[activeType].label} yet.</>}
+              </p>
+              <p className="gallery-empty__hint">
+                {query.trim()
+                  ? "Try a brand, a color or a shorter word. Details like “hood” or “logo” work too."
+                  : "Import one from the button in the corner, or look through everything."}
+              </p>
+              <button type="button" className="gallery-empty__action" onClick={() => { setQuery(""); setActiveType("all"); }}>
+                {query.trim() && activeType === "all" ? "Clear search" : "Show everything"}
+              </button>
+            </div>
           )}
 
           {!!items.length && (
