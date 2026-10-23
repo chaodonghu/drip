@@ -423,12 +423,14 @@ async function openAIFetch(url, options) {
   }
 }
 
-function describeImageFailure(response) {
+const MODERATION_BLOCKED = "moderation_blocked";
+
+function imageFailure(response) {
   const failed = response.output?.find((item) => item.type === "image_generation_call" && item.error);
-  if (failed?.error?.code === "moderation_blocked") {
-    return "OpenAI's safety system declined to draw this image. That usually means the artwork is a protected character or brand, which the image model will not reproduce.";
+  if (failed?.error?.code === MODERATION_BLOCKED) {
+    return Object.assign(new Error("Blocked by OpenAI. Its safety filter will not redraw this artwork because it looks like a protected character or brand, even on clothing you own. Retrying will not help, so remove this piece from the queue."), { code: MODERATION_BLOCKED });
   }
-  return failed?.error?.message || response.output_text?.trim() || "OpenAI response did not contain image data";
+  return new Error(failed?.error?.message || response.output_text?.trim() || "OpenAI response did not contain image data");
 }
 
 async function openAIEdit({ key, baseUrl, responseModel, imageModel, prompt, images, size, background, quality }) {
@@ -465,9 +467,9 @@ async function openAIEdit({ key, baseUrl, responseModel, imageModel, prompt, ima
         if (event.type === "response.output_item.done" && event.item.type === "image_generation_call") encoded = event.item.result;
         if (event.type === "response.completed") {
           encoded ||= event.response.output?.find((item) => item.type === "image_generation_call")?.result;
-          if (!encoded) terminalError = describeImageFailure(event.response);
+          if (!encoded) terminalError = imageFailure(event.response);
         }
-        if (event.type === "response.failed") terminalError = event.response.error?.message || "OpenAI image request failed";
+        if (event.type === "response.failed") terminalError = new Error(event.response.error?.message || "OpenAI image request failed");
       }
     } catch (error) {
       if (!responseId || connection === 3) throw error;
@@ -478,7 +480,7 @@ async function openAIEdit({ key, baseUrl, responseModel, imageModel, prompt, ima
       stream = await client.responses.retrieve(responseId, { stream: true, starting_after: cursor });
     }
   }
-  if (terminalError) throw new Error(terminalError);
+  if (terminalError) throw terminalError;
   if (!encoded) throw new Error("OpenAI image stream ended without image data");
   return Buffer.from(encoded, "base64");
 }
@@ -665,7 +667,7 @@ export function createImportApi({ storage, setting, background }) {
       } catch (error) {
         const fresh = await loadJob(current.id);
         if (!fresh?.stages?.[stageName]) return;
-        fresh.stages[stageName].status = "failed"; fresh.stages[stageName].error = error.message; fresh.stages[stageName].updatedAt = new Date().toISOString();
+        fresh.stages[stageName].status = "failed"; fresh.stages[stageName].error = error.message; fresh.stages[stageName].errorCode = error.code || null; fresh.stages[stageName].updatedAt = new Date().toISOString();
         if (typeof failedAssetUrl === "string") fresh.stages[stageName].failedAssetUrl = failedAssetUrl;
         if (chromaKeyUsed) fresh.stages[stageName].chromaKey = chromaKeyUsed;
         await saveJob(fresh);
@@ -700,7 +702,7 @@ export function createImportApi({ storage, setting, background }) {
         }) }));
         if (!record) await Promise.all(names.map((name) => storage.remove(`library/${name}`)));
       } catch (error) {
-        await patchRecord(itemId, () => ({ turnaround: turnaroundState("failed", { error: error.message }) }));
+        await patchRecord(itemId, () => ({ turnaround: turnaroundState("failed", { error: error.message, errorCode: error.code || null }) }));
       }
     })().finally(() => running.delete(lock));
     running.set(lock, task);

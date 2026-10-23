@@ -455,7 +455,7 @@ function TurnaroundPanel({ turnaround, onGenerate, canEdit }) {
   return (
     <section className="turnaround" aria-label="360 view controls">
       {status === "failed" && <p className="turnaround-error" role="alert">{turnaround.error}</p>}
-      {canEdit && status !== "processing" && (
+      {canEdit && status !== "processing" && turnaround?.errorCode !== "moderation_blocked" && (
         <button className="turnaround-action" type="button" onClick={generate} disabled={pending}>
           {TURNAROUND_ACTIONS[status] || "Generate 360 view"}
         </button>
