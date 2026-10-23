@@ -21,6 +21,8 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout, a modeled p
 - Generates a modeled photo of the piece on you, with a generic face in place of yours
 - Generates an eight view 360 spin of you wearing the piece, with a generic face in place of yours. Drag or use the arrow keys to turn it
 - Draws a different reference photo of you from a pool for every generation, so the look varies between pieces and regenerations
+- Searches the gallery by name, detail or category with typo tolerance, and keeps the search and category in the URL so a link opens the same view
+- Shows visitors a read-only gallery. Editing, importing, regenerating and deleting need the import secret
 - Runs locally against a `data/` folder, or on Vercel with a private Blob store so you can import from your phone
 
 ## Quick start
@@ -45,6 +47,14 @@ Open the import panel and choose one or more photos.
 - Approving the modeled photo starts the 360 spin. It takes about a minute and can be regenerated from the item viewer.
 
 Everything lives in `data/` when running locally: `library.json`, originals, jobs, and generated images.
+
+Generation runs on the server. Closing the import panel, or the tab, does not stop it. A step that needs your approval waits until you come back.
+
+## Sharing
+
+Anyone with the URL sees the gallery, the spins and each piece's name, category, colors and details, with nothing to click but Close. Filters live in the URL, so `/?type=shoes&q=pollex` opens that exact view for whoever receives it.
+
+Editing is tied to the import secret. Open the import panel and enter it once, and that browser gets the editor back: name, category and color changes, detail tags, Regenerate on the spin, and Delete. Clear the secret, or get it wrong, and the view returns to read-only.
 
 ## Configuration
 
@@ -104,7 +114,7 @@ The hosted app runs the import API as one Vercel function and keeps the library,
 
    Without the connection, deploy by hand with `vercel deploy --prod`.
 
-6. Open the deployed app on your phone, open the import panel, and enter the import secret. The browser remembers it.
+6. Open the deployed app on your phone, open the import panel, and enter the import secret. The browser remembers it, and until it has one the app stays read-only.
 
 Code ships through Git. Data does not: imports made in the hosted app land in Blob directly, and `npm run publish-data` is only needed when you add model photos or import pieces locally and want them hosted. It replaces the hosted library with the local one.
 

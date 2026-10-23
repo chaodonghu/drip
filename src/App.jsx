@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, MagnifyingGlass, Plus, SpinnerGap, Trash, X } from "@phosphor-icons/react";
-import { importAuthHeaders, WardrobeImportFlow } from "./import-flow.jsx";
+import { importAuthHeaders, SECRET_CHANGE_EVENT, storedSecret, WardrobeImportFlow } from "./import-flow.jsx";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
@@ -325,6 +325,25 @@ function ColorControl({ label, field, value, palette, onChange, sampling, setSam
   );
 }
 
+function ItemSummary({ item }) {
+  const tags = (item.tags || []).filter(Boolean);
+  const colors = [item.color, item.secondaryColor].filter(Boolean);
+  return (
+    <div className="item-summary">
+      <h2>{item.name || TYPE_MAP[item.part]?.singular || "Wardrobe item"}</h2>
+      <dl>
+        <div><dt>Category</dt><dd>{TYPE_MAP[item.part]?.label || "Uncategorized"}</dd></div>
+        {colors.length > 0 && (
+          <div><dt>Colors</dt><dd className="summary-colors">{colors.map((color) => <span key={color}><i style={{ backgroundColor: color }} aria-hidden="true" />{color}</span>)}</dd></div>
+        )}
+        {tags.length > 0 && (
+          <div><dt>Details</dt><dd className="summary-tags">{tags.map((tag) => <span key={tag}>{tag}</span>)}</dd></div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
 function ItemEditor({ draft, setDraft, palette, sampling, setSampling, sampleStatus }) {
   const suggestedSecondary = palette.find((color) => color.toLowerCase() !== draft.color?.toLowerCase()) || "#9a9286";
 
@@ -443,7 +462,7 @@ function TurnaroundStrip({ frames, label }) {
   );
 }
 
-function TurnaroundPanel({ turnaround, onGenerate }) {
+function TurnaroundPanel({ turnaround, onGenerate, canEdit }) {
   const [pending, setPending] = useState(false);
   const [requestError, setRequestError] = useState("");
   const status = turnaround?.status;
@@ -463,7 +482,7 @@ function TurnaroundPanel({ turnaround, onGenerate }) {
   return (
     <section className="turnaround" aria-label="360 view controls">
       {status === "failed" && <p className="turnaround-error" role="alert">{turnaround.error}</p>}
-      {status !== "processing" && (
+      {canEdit && status !== "processing" && (
         <button className="turnaround-action" type="button" onClick={generate} disabled={pending}>
           {TURNAROUND_ACTIONS[status] || "Generate 360 view"}
         </button>
@@ -487,7 +506,7 @@ function SpinHero({ turnaround, label, sampling, garmentArtwork }) {
   );
 }
 
-function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround }) {
+function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, canEdit }) {
   const closeButtonRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
@@ -642,10 +661,16 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround }) {
       )}
 
       {hasModeledImage && (
-        <TurnaroundPanel turnaround={item.turnaround} onGenerate={() => onGenerateTurnaround(item.id)} />
+        <TurnaroundPanel turnaround={item.turnaround} onGenerate={() => onGenerateTurnaround(item.id)} canEdit={canEdit} />
       )}
 
-      <div className="viewer-details editing">
+      {!canEdit && (
+        <div className="viewer-details">
+          <ItemSummary item={item} />
+        </div>
+      )}
+
+      {canEdit && <div className="viewer-details editing">
         <ItemEditor
           draft={draft}
           setDraft={setDraft}
@@ -667,16 +692,34 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround }) {
             <Check size={15} weight="bold" aria-hidden="true" /> Save
           </button>
         </div>
-      </div>
+      </div>}
     </aside>
     </div>
     </div>
   );
 }
 
+// Editing needs the import secret when the server requires one. Until the config answers, assume it does.
+function useCanEdit() {
+  const [requiresSecret, setRequiresSecret] = useState(true);
+  const [hasSecret, setHasSecret] = useState(() => Boolean(storedSecret()));
+  useEffect(() => {
+    fetch("/api/import/config", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((config) => { if (config) setRequiresSecret(Boolean(config.requiresSecret)); })
+      .catch(() => {});
+    const update = () => setHasSecret(Boolean(storedSecret()));
+    window.addEventListener(SECRET_CHANGE_EVENT, update);
+    window.addEventListener("storage", update);
+    return () => { window.removeEventListener(SECRET_CHANGE_EVENT, update); window.removeEventListener("storage", update); };
+  }, []);
+  return !requiresSecret || hasSecret;
+}
+
 export function App() {
   const [items, setItems] = useState([]);
   const [initialView] = useState(readViewFromUrl);
+  const canEdit = useCanEdit();
   const [activeType, setActiveType] = useState(initialView.type);
   const [query, setQuery] = useState(initialView.query);
   const [selectedId, setSelectedId] = useState(null);
@@ -843,7 +886,7 @@ export function App() {
         )}
       </main>
 
-      {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateTurnaround={generateTurnaround} />}
+      {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateTurnaround={generateTurnaround} canEdit={canEdit} />}
       <WardrobeImportFlow onGarmentApproved={addImportedItem} onModeledApproved={attachImportedModeledImage} />
     </div>
   );
