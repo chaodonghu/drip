@@ -757,7 +757,6 @@ export function App() {
       return a.id.localeCompare(b.id);
     });
   }, [activeType, items, query]);
-  const filtering = activeType !== "all" || Boolean(query.trim());
 
   const chooseType = (typeId) => {
     setActiveType(typeId);
@@ -810,23 +809,20 @@ export function App() {
   return (
     <div className={`app-shell${selectedItem ? " has-selection" : ""}`}>
       <main className="gallery-pane">
-        <header className="gallery-header">
-          <div className="gallery-meta-row">
-            <p className="piece-count">{loading ? <span className="piece-count-placeholder" aria-label="Loading pieces" /> : <>{filtering ? `${visibleItems.length} of ${items.length}` : items.length} {items.length === 1 ? "piece" : "pieces"}</>}</p>
-            <label className="gallery-search">
-              <MagnifyingGlass size={15} aria-hidden="true" />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => { setQuery(event.target.value); setSelectedId(null); }}
-                placeholder="Search by name or detail"
-                aria-label="Search pieces by name or detail"
-                autoComplete="off"
-                spellCheck={false}
-              />
-              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}
-            </label>
-          </div>
+        <aside className="gallery-rail">
+          <label className="gallery-search">
+            <MagnifyingGlass size={15} aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => { setQuery(event.target.value); setSelectedId(null); }}
+              placeholder="Search"
+              aria-label="Search pieces by name or detail"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}
+          </label>
           <nav className="category-nav" aria-label="Filter wardrobe by item type">
             {TYPES.map((type) => (
               <button
@@ -840,32 +836,51 @@ export function App() {
               </button>
             ))}
           </nav>
-        </header>
+        </aside>
 
-        {error && <p className="status error">{error}</p>}
-        {!error && loading && (
-          <div className="gallery-skeleton" role="status" aria-label="Loading wardrobe" aria-busy="true" />
-        )}
-        {!error && !loading && !items.length && <p className="status empty">Drop, paste, or add a photo to import your first piece.</p>}
-        {!!items.length && !visibleItems.length && (
-          <p className="status empty">
-            No pieces match{query.trim() ? ` “${query.trim()}”` : ""}{activeType !== "all" ? ` in ${TYPE_MAP[activeType].label}` : ""}.
-            {" "}<button type="button" className="status-link" onClick={() => { setQuery(""); setActiveType("all"); }}>Show everything</button>
-          </p>
-        )}
+        <div className="gallery-main">
 
-        {!!items.length && (
-          <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
-            {visibleItems.map((item) => (
-              <GalleryItem
-                key={item.id}
-                item={item}
-                selected={selectedId === item.id}
-                onOpen={setSelectedId}
-              />
-            ))}
-          </section>
-        )}
+          {error && <p className="status error">{error}</p>}
+          {!error && loading && (
+            <div className="gallery-skeleton" role="status" aria-label="Loading wardrobe" aria-busy="true" />
+          )}
+          {!error && !loading && !items.length && (
+            <div className="gallery-empty">
+              <p className="gallery-empty__title">Your wardrobe is empty.</p>
+              <p className="gallery-empty__hint">Drop a photo here, paste one, or use the button in the corner to import your first piece.</p>
+            </div>
+          )}
+          {!!items.length && !visibleItems.length && (
+            <div className="gallery-empty">
+              <p className="gallery-empty__title">
+                {query.trim()
+                  ? <>No pieces match “{query.trim()}”{activeType !== "all" ? ` in ${TYPE_MAP[activeType].label}` : ""}.</>
+                  : <>Nothing in {TYPE_MAP[activeType].label} yet.</>}
+              </p>
+              <p className="gallery-empty__hint">
+                {query.trim()
+                  ? "Try a brand, a color or a shorter word. Details like “hood” or “logo” work too."
+                  : "Import one from the button in the corner, or look through everything."}
+              </p>
+              <button type="button" className="gallery-empty__action" onClick={() => { setQuery(""); setActiveType("all"); }}>
+                {query.trim() && activeType === "all" ? "Clear search" : "Show everything"}
+              </button>
+            </div>
+          )}
+
+          {!!items.length && (
+            <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
+              {visibleItems.map((item) => (
+                <GalleryItem
+                  key={item.id}
+                  item={item}
+                  selected={selectedId === item.id}
+                  onOpen={setSelectedId}
+                />
+              ))}
+            </section>
+          )}
+        </div>
       </main>
 
       {toast && <div className="toast" role="status" key={toast.key}>{toast.text}</div>}
