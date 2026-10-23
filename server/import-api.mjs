@@ -813,8 +813,9 @@ export function createImportApi({ storage, setting, background }) {
       const rejected = loadedJobs.filter((job) => job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected");
       await Promise.all(rejected.map((job) => removeJob(job.id)));
       // The hosted function never boots through recoverJobs, so jobs left over from the modeled-photo step finish here.
-      const finished = await Promise.all(loadedJobs.filter(isFinished).map(finishJob));
-      const hidden = new Set([...rejected, ...loadedJobs.filter(isFinished).filter((_, index) => finished[index])]);
+      // One at a time: each finish rewrites library.json, and parallel writes lose each other's records.
+      const hidden = new Set(rejected);
+      for (const job of loadedJobs.filter(isFinished)) if (await finishJob(job)) hidden.add(job);
       const jobs = loadedJobs.filter((job) => !hidden.has(job)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       await Promise.all(jobs.map(failStuckStages));
       return json(200, jobs.map(publicJob));
