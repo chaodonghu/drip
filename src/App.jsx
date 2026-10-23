@@ -3,7 +3,6 @@ import { Check, MagnifyingGlass, Plus, SpinnerGap, Trash, X } from "@phosphor-ic
 import { importAuthHeaders, SECRET_CHANGE_EVENT, storedSecret, WardrobeImportFlow } from "./import-flow.jsx";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 
-const STORAGE_KEY = "open-wardrobe-edits-v1";
 const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
 
 const TYPES = [
@@ -66,32 +65,6 @@ const TURNAROUND_VIEWS = ["Front", "Front left", "Left", "Back left", "Back", "B
 const TURNAROUND_ACTIONS = { ready: "Regenerate", failed: "Try again" };
 
 
-function readEdits() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-
-function persistEdit(item) {
-  const edits = readEdits();
-  edits[item.id] = {
-    name: item.name || "",
-    part: item.part,
-    color: item.color || null,
-    secondaryColor: item.secondaryColor || null,
-    tags: item.tags || [],
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-}
-
-function removePersistedEdit(id) {
-  const edits = readEdits();
-  delete edits[id];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-}
 
 function readDeletedItems() {
   try {
@@ -592,10 +565,20 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, can
     onClose();
   };
 
-  const saveEditing = () => {
-    onSave({ ...item, ...draft, name: draft.name.trim(), tags: draft.tags.map((tag) => tag.trim()).filter(Boolean) });
-    setSampling(null);
-    setSampleStatus("Changes saved.");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const saveEditing = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onSave({ ...item, ...draft, name: draft.name.trim(), tags: draft.tags.map((tag) => tag.trim()).filter(Boolean) });
+      setSampling(null);
+      setSampleStatus("");
+    } catch (error) {
+      setSaveError(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleImageLoad = (event) => {
@@ -681,6 +664,7 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, can
         />
 
         {closeBlocked && <p className="unsaved-notice" role="status">Save or cancel changes before closing.</p>}
+        {saveError && <p className="unsaved-notice" role="alert">{saveError}</p>}
 
         <div className="viewer-actions">
           <button className="delete-button" type="button" onClick={() => onDelete(item.id)}>
@@ -688,8 +672,8 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, can
           </button>
           <span className="action-spacer" />
           <button className="secondary-button" type="button" onClick={cancelEditing}>Cancel</button>
-          <button className="primary-button" type="button" onClick={saveEditing}>
-            <Check size={15} weight="bold" aria-hidden="true" /> Save
+          <button className="primary-button" type="button" onClick={saveEditing} disabled={!isDirty || saving}>
+            {saving ? <SpinnerGap size={15} className="import-spinner" aria-hidden="true" /> : <Check size={15} weight="bold" aria-hidden="true" />} {saving ? "Saving" : "Save"}
           </button>
         </div>
       </div>}
@@ -733,10 +717,9 @@ export function App() {
         return response.json();
       })
       .then((loadedItems) => {
-        const edits = readEdits();
         const deleted = readDeletedItems();
         const visibleItems = loadedItems.filter((item) => !deleted.has(item.id));
-        setItems(visibleItems.map((item) => ({ ...item, ...(edits[item.id] || {}) })));
+        setItems(visibleItems);
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
@@ -795,9 +778,27 @@ export function App() {
     setSelectedId(null);
   };
 
-  const saveItem = (updatedItem) => {
-    setItems((current) => current.map((item) => item.id === updatedItem.id ? updatedItem : item));
-    persistEdit(updatedItem);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+  const announce = useCallback((text) => {
+    setToast({ text, key: Date.now() });
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  const saveItem = async (updatedItem) => {
+    const { name, part, color, secondaryColor, tags } = updatedItem;
+    const response = await fetch(`/api/import/wardrobe/${updatedItem.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...importAuthHeaders() },
+      body: JSON.stringify({ name, part, color, secondaryColor, tags }),
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(saved.error || (response.status === 401 ? "The import secret was rejected." : "The piece could not be saved."));
+    setItems((current) => current.map((item) => item.id === saved.id ? { ...item, ...saved } : item));
+    announce("Saved");
+    return saved;
   };
 
   const deleteItem = async (id) => {
@@ -811,9 +812,9 @@ export function App() {
       }
     }
     setItems((current) => current.filter((item) => item.id !== id));
-    removePersistedEdit(id);
     persistDeletedItem(id);
     setSelectedId(null);
+    announce("Deleted");
   };
 
   const addImportedItem = useCallback((newItem) => {
@@ -890,6 +891,7 @@ export function App() {
         )}
       </main>
 
+      {toast && <div className="toast" role="status" key={toast.key}>{toast.text}</div>}
       {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateTurnaround={generateTurnaround} canEdit={canEdit} />}
       <WardrobeImportFlow onGarmentApproved={addImportedItem} onModeledApproved={attachImportedModeledImage} />
     </div>
