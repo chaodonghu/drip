@@ -48,15 +48,19 @@ async function fileToDataUrl(file, { maxEdge, passthroughBytes }) {
   return canvas.toDataURL("image/jpeg", 0.9);
 }
 
-function storedSecret() {
+export const SECRET_CHANGE_EVENT = "wardrobe-secret-change";
+
+export function storedSecret() {
   try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; }
 }
 
+// The gallery listens for this so it can switch between the editor and the read-only view.
 function storeSecret(secret) {
   try {
     if (secret) localStorage.setItem(SECRET_KEY, secret);
     else localStorage.removeItem(SECRET_KEY);
   } catch {}
+  window.dispatchEvent(new Event(SECRET_CHANGE_EVENT));
 }
 
 export function importAuthHeaders() {
