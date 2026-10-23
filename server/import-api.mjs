@@ -763,6 +763,14 @@ export function createImportApi({ storage, setting, background }) {
       return json(200, await setupStatus());
     }
     const wardrobeDeleteMatch = url.pathname.match(/^\/api\/import\/wardrobe\/(import-[a-f0-9-]{36})$/i);
+    // Edits from the viewer. Only the editable fields change; images, spin and ids stay as they are.
+    if (wardrobeDeleteMatch && request.method === "PATCH") {
+      const input = await body(request);
+      const { name, part, color, secondaryColor, tags } = normalizeMetadata(input);
+      const record = await patchRecord(wardrobeDeleteMatch[1], () => ({ name, part, color, secondaryColor, tags, updatedAt: new Date().toISOString() }));
+      if (!record) return json(404, { error: "Imported wardrobe item not found" });
+      return json(200, record);
+    }
     if (wardrobeDeleteMatch && request.method === "DELETE") {
       const id = wardrobeDeleteMatch[1];
       const records = await loadImported();
