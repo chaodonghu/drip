@@ -795,9 +795,12 @@ export function createImportApi({ storage, setting, background }) {
     if (url.pathname === API_ROOT && request.method === "GET") {
       const ids = await storage.listJobIds();
       const loadedJobs = (await Promise.all(ids.map((id) => loadJob(id)))).filter(Boolean);
-      const hiddenJobs = loadedJobs.filter((job) => job.status === "complete" || job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected");
-      await Promise.all(hiddenJobs.map((job) => removeJob(job.id)));
-      const jobs = loadedJobs.filter((job) => !hiddenJobs.includes(job)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const rejected = loadedJobs.filter((job) => job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected");
+      await Promise.all(rejected.map((job) => removeJob(job.id)));
+      // The hosted function never boots through recoverJobs, so jobs left over from the modeled-photo step finish here.
+      const finished = await Promise.all(loadedJobs.filter(isFinished).map(finishJob));
+      const hidden = new Set([...rejected, ...loadedJobs.filter(isFinished).filter((_, index) => finished[index])]);
+      const jobs = loadedJobs.filter((job) => !hidden.has(job)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       await Promise.all(jobs.map(failStuckStages));
       return json(200, jobs.map(publicJob));
     }
@@ -911,6 +914,26 @@ export function createImportApi({ storage, setting, background }) {
     }
   }
 
+  // Jobs from before the modeled-photo step was removed can sit with an approved cutout and nothing after it.
+  const isFinished = (job) => job.status === "complete" || job.stages.garment.status === "approved";
+
+  // Saves the piece, closes the job and starts its 360 view. Returns false when the save failed and the job is back in review.
+  async function finishJob(job) {
+    try {
+      const record = await persistImported(job);
+      await removeJob(job.id);
+      if (!record.turnaround) await startTurnaround(record.id).catch(() => {});
+      return true;
+    } catch {
+      job.status = "active";
+      job.stages.garment.status = "review";
+      job.stages.garment.decision = null;
+      job.stages.garment.error = null;
+      await saveJob(job);
+      return false;
+    }
+  }
+
   async function recoverJobs() {
     for (const id of await storage.listJobIds()) {
       const job = await loadJob(id);
@@ -919,19 +942,8 @@ export function createImportApi({ storage, setting, background }) {
         await removeJob(job.id);
         continue;
       }
-      // Jobs from before the modeled-photo step was removed can sit with an approved cutout and nothing after it.
-      if (job.status === "complete" || job.stages.garment.status === "approved") {
-        try {
-          const record = await persistImported(job);
-          await removeJob(job.id);
-          if (!record.turnaround) await startTurnaround(record.id).catch(() => {});
-        } catch {
-          job.status = "active";
-          job.stages.garment.status = "review";
-          job.stages.garment.decision = null;
-          job.stages.garment.error = null;
-          await saveJob(job);
-        }
+      if (isFinished(job)) {
+        await finishJob(job);
         continue;
       }
       if (job.stages.crop && job.stages.crop.status !== "approved") continue;
