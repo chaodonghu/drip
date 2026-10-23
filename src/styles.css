@@ -213,6 +213,27 @@ button { font: inherit; }
   outline-offset: 3px;
 }
 
+.piece-count-placeholder {
+  display: inline-block;
+  width: 72px;
+  height: 11px;
+  vertical-align: middle;
+  background: rgba(25, 25, 25, .08);
+}
+
+.skeleton-tile {
+  width: 100%;
+  aspect-ratio: .78;
+  background: linear-gradient(100deg, rgba(25, 25, 25, .05) 35%, rgba(25, 25, 25, .1) 50%, rgba(25, 25, 25, .05) 65%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
 .status {
   margin: 70px 56px;
   color: var(--muted);
@@ -1041,6 +1062,7 @@ button { font: inherit; }
   .gallery-item img,
   .category-nav button::after,
   .turnaround-dots span { transition: none; }
+  .skeleton-tile { animation: none; }
   .viewer-overlay,
   .viewer-entry { animation: none; }
   .viewer.shake {

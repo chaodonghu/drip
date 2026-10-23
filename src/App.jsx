@@ -832,7 +832,7 @@ export function App() {
       <main className="gallery-pane">
         <header className="gallery-header">
           <div className="gallery-meta-row">
-            <p className="piece-count">{filtering ? `${visibleItems.length} of ${items.length}` : items.length} {items.length === 1 ? "piece" : "pieces"}</p>
+            <p className="piece-count">{loading ? <span className="piece-count-placeholder" aria-label="Loading pieces" /> : <>{filtering ? `${visibleItems.length} of ${items.length}` : items.length} {items.length === 1 ? "piece" : "pieces"}</>}</p>
             <label className="gallery-search">
               <MagnifyingGlass size={15} aria-hidden="true" />
               <input
@@ -863,7 +863,11 @@ export function App() {
         </header>
 
         {error && <p className="status error">{error}</p>}
-        {!error && loading && <p className="status">Loading wardrobe</p>}
+        {!error && loading && (
+          <section className="gallery-grid gallery-skeleton" aria-label="Loading wardrobe" aria-busy="true">
+            {Array.from({ length: 6 }, (_, index) => <div key={index} className="skeleton-tile" style={{ animationDelay: `${index * 90}ms` }} />)}
+          </section>
+        )}
         {!error && !loading && !items.length && <p className="status empty">Drop, paste, or add a photo to import your first piece.</p>}
         {!!items.length && !visibleItems.length && (
           <p className="status empty">
