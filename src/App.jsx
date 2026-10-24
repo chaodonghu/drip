@@ -17,16 +17,21 @@ const TYPES = [
 const TYPE_MAP = Object.fromEntries(TYPES.map((type) => [type.id, type]));
 
 // The gallery view lives in the URL as ?type=<id>&q=<search>, so a link reproduces the same filtered set.
+// Piece ids are "import-<uuid>" in the library; the link carries just the uuid.
+const pieceIdFromUrl = (value) => (value ? (value.startsWith("import-") ? value : `import-${value}`) : null);
+const pieceParam = (id) => id.replace(/^import-/, "");
+
 function readViewFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const type = params.get("type");
-  return { type: type && type !== "all" && TYPE_MAP[type] ? type : "all", query: params.get("q") || "" };
+  return { type: type && type !== "all" && TYPE_MAP[type] ? type : "all", query: params.get("q") || "", piece: pieceIdFromUrl(params.get("piece")) };
 }
 
-function writeViewToUrl({ type, query }) {
+function writeViewToUrl({ type, query, piece }) {
   const params = new URLSearchParams(window.location.search);
   if (type === "all") params.delete("type"); else params.set("type", type);
   if (query.trim()) params.set("q", query.trim()); else params.delete("q");
+  if (piece) params.set("piece", pieceParam(piece)); else params.delete("piece");
   const search = params.toString();
   const next = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
   if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.replaceState(null, "", next);
@@ -175,9 +180,14 @@ function sampleImageColor(image, canvas, event) {
 
 function GalleryItem({ item, selected, onOpen }) {
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
+  const ref = useRef(null);
+
+  // A piece opened from a shared link may sit below the fold.
+  useEffect(() => { if (selected) ref.current?.scrollIntoView({ block: "nearest" }); }, [selected]);
 
   return (
     <button
+      ref={ref}
       className={`gallery-item${selected ? " selected" : ""}`}
       type="button"
       onClick={() => onOpen(item.id)}
@@ -692,7 +702,7 @@ export function App() {
   const canEdit = useCanEdit();
   const [activeType, setActiveType] = useState(initialView.type);
   const [query, setQuery] = useState(initialView.query);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialView.piece);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -745,7 +755,7 @@ export function App() {
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
-  useEffect(() => { writeViewToUrl({ type: activeType, query }); }, [activeType, query]);
+  useEffect(() => { writeViewToUrl({ type: activeType, query, piece: selectedId }); }, [activeType, query, selectedId]);
 
   const visibleItems = useMemo(() => {
     const filtered = items.filter((item) => (activeType === "all" || item.part === activeType) && matchesSearch(item, query));
