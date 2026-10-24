@@ -20,7 +20,7 @@ A personal wardrobe gallery. Photograph a piece, get a clean cutout and a 360 sp
 - Takes several photos of one piece as angles of the same garment
 - Generates an eight view 360 spin of you wearing the piece, with a generic face in place of yours. Drag or use the arrow keys to turn it
 - Draws a different reference photo of you from a pool for every generation, so the look varies between pieces and regenerations
-- Searches the gallery by name, detail or category with typo tolerance, and keeps the search and category in the URL so a link opens the same view
+- Searches the gallery by name, detail or category with typo tolerance, and keeps the search, category and open piece in the URL so a link opens the same view
 - Shows visitors a read-only gallery. Editing, importing, regenerating and deleting need the import secret
 - Runs locally against a `data/` folder, or on Vercel with a private Blob store so you can import from your phone
 
@@ -52,7 +52,7 @@ Generation runs on the server. Closing the import panel, or the tab, does not st
 
 ## Sharing
 
-Anyone with the URL sees the gallery, the spins and each piece's name, category, colors and details, with nothing to click but Close. Filters live in the URL, so `/?type=shoes&q=pollex` opens that exact view for whoever receives it.
+Anyone with the URL sees the gallery, the spins and each piece's name, category, colors and details, with nothing to click but Close. Filters live in the URL, so `/?type=shoes&q=pollex` opens that exact view for whoever receives it. Opening a piece adds `piece=<id>` to the URL, and Copy link under the spin puts that link on the clipboard. On Vercel the link previews with the piece's name and cutout when pasted into a chat.
 
 Editing is tied to the import secret. Open the import panel and enter it once, and that browser gets the editor back: name, category and color changes, detail tags, Regenerate on the spin, and Delete. Clear the secret, or get it wrong, and the view returns to read-only.
 

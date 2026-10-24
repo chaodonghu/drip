@@ -417,6 +417,12 @@ button { font: inherit; }
   padding: 18px 34px 6px;
 }
 
+.turnaround-actions {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
 .turnaround-strip {
   width: 100%;
   display: grid;
