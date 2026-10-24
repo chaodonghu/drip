@@ -52,7 +52,7 @@ Generation runs on the server. Closing the import panel, or the tab, does not st
 
 ## Sharing
 
-Anyone with the URL sees the gallery, the spins and each piece's name, category, colors and details, with nothing to click but Close. Filters live in the URL, so `/?type=shoes&q=pollex` opens that exact view for whoever receives it. Opening a piece adds `piece=<id>` to the URL, so copying the address while the viewer is open gives a link that opens straight to that piece.
+Anyone with the URL sees the gallery, the spins and each piece's name, category, colors and details, with nothing to click but Close. Filters live in the URL, so `/?type=shoes&q=pollex` opens that exact view for whoever receives it. Opening a piece adds `piece=<id>` to the URL, and Copy link under the spin puts that link on the clipboard. On Vercel the link previews with the piece's name and cutout when pasted into a chat.
 
 Editing is tied to the import secret. Open the import panel and enter it once, and that browser gets the editor back: name, category and color changes, detail tags, Regenerate on the spin, and Delete. Clear the secret, or get it wrong, and the view returns to read-only.
 

@@ -1,8 +1,23 @@
 {
   "functions": {
-    "api/index.js": { "maxDuration": 300 }
+    "api/index.js": {
+      "maxDuration": 300
+    }
   },
   "rewrites": [
-    { "source": "/api/import/:path*", "destination": "/api/index" }
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "piece"
+        }
+      ],
+      "destination": "/api/share"
+    },
+    {
+      "source": "/api/import/:path*",
+      "destination": "/api/index"
+    }
   ]
 }

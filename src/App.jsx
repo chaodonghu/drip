@@ -445,7 +445,7 @@ function TurnaroundStrip({ frames, label }) {
   );
 }
 
-function TurnaroundPanel({ turnaround, onGenerate, canEdit }) {
+function TurnaroundPanel({ turnaround, onGenerate, onCopyLink, canEdit }) {
   const [pending, setPending] = useState(false);
   const [requestError, setRequestError] = useState("");
   const status = turnaround?.status;
@@ -465,11 +465,14 @@ function TurnaroundPanel({ turnaround, onGenerate, canEdit }) {
   return (
     <section className="turnaround" aria-label="360 view controls">
       {status === "failed" && <p className="turnaround-error" role="alert">{turnaround.error}</p>}
-      {canEdit && status !== "processing" && turnaround?.errorCode !== "moderation_blocked" && (
-        <button className="turnaround-action" type="button" onClick={generate} disabled={pending}>
-          {TURNAROUND_ACTIONS[status] || "Generate 360 view"}
-        </button>
-      )}
+      <div className="turnaround-actions">
+        {canEdit && status !== "processing" && turnaround?.errorCode !== "moderation_blocked" && (
+          <button className="turnaround-action" type="button" onClick={generate} disabled={pending}>
+            {TURNAROUND_ACTIONS[status] || "Generate 360 view"}
+          </button>
+        )}
+        <button className="turnaround-action" type="button" onClick={onCopyLink}>Copy link</button>
+      </div>
       {requestError && <p className="turnaround-error" role="alert">{requestError}</p>}
     </section>
   );
@@ -489,7 +492,7 @@ function SpinHero({ turnaround, label, sampling, garmentArtwork }) {
   );
 }
 
-function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, canEdit }) {
+function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, onCopyLink, canEdit }) {
   const closeButtonRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
@@ -641,7 +644,7 @@ function ItemViewer({ item, onClose, onSave, onDelete, onGenerateTurnaround, can
         garmentArtwork={garmentArtwork}
       />
 
-      <TurnaroundPanel turnaround={item.turnaround} onGenerate={() => onGenerateTurnaround(item.id)} canEdit={canEdit} />
+      <TurnaroundPanel turnaround={item.turnaround} onGenerate={() => onGenerateTurnaround(item.id)} onCopyLink={() => onCopyLink(item.id)} canEdit={canEdit} />
 
       {!canEdit && (
         <div className="viewer-details">
@@ -780,6 +783,16 @@ export function App() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   }, []);
+
+  const copyLink = useCallback(async (id) => {
+    const link = `${window.location.origin}${window.location.pathname}?piece=${pieceParam(id)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      announce("Link copied");
+    } catch {
+      announce("Copy failed. The link is in the address bar.");
+    }
+  }, [announce]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const saveItem = async (updatedItem) => {
@@ -894,7 +907,7 @@ export function App() {
       </main>
 
       {toast && <div className="toast" role="status" key={toast.key}>{toast.text}</div>}
-      {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateTurnaround={generateTurnaround} canEdit={canEdit} />}
+      {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateTurnaround={generateTurnaround} onCopyLink={copyLink} canEdit={canEdit} />}
       <WardrobeImportFlow onGarmentApproved={addImportedItem} />
     </div>
   );
