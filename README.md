@@ -1,6 +1,6 @@
 <div align="center">
 
-# Drip
+# WarDrip
 
 A personal wardrobe gallery. Photograph a piece, get a clean cutout and a 360 spin of it on you.
 
