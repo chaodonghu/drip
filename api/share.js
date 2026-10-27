@@ -1,7 +1,8 @@
 import { createBlobStorage } from "../server/storage-blob.mjs";
 
-// Serves the app shell for /?piece=<id> with that piece's name and cutout in the share tags,
-// so a pasted link previews the piece instead of the generic site card.
+// Serves the app shell for /?piece=<id> with that piece's name and its front spin frame in the
+// share tags, so a pasted link previews the piece on the model instead of the generic site card.
+// vercel.json routes this ahead of the filesystem, otherwise the static index.html wins.
 const storage = createBlobStorage({ token: process.env.BLOB_READ_WRITE_TOKEN });
 const LABELS = { upperbody: "Top", wholebody_up: "Jacket", lowerbody: "Bottom", accessories_up: "Accessory", shoes: "Shoes" };
 const escape = (value) => String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -19,7 +20,9 @@ export default {
       const title = piece.name || "Wardrobe piece";
       const details = [LABELS[piece.part], ...(piece.tags || []).slice(0, 3)].filter(Boolean).join(" \u00b7 ");
       const description = `${details}. A piece in Drip, with a 360 spin.`;
-      const image = `${origin}${piece.image}`;
+      const frame = piece.turnaround?.status === "ready" ? piece.turnaround.frames?.[0] : null;
+      const image = `${origin}${frame || piece.image}`;
+      const alt = frame ? `${title}, worn, front view` : `${title}, cutout`;
       const link = `${origin}/?piece=${encodeURIComponent(piece.id.replace(/^import-/, ""))}`;
       html = html.replace(/<title>[^<]*<\/title>/, `<title>${escape(title)} \u00b7 Drip</title>`);
       html = meta(html, "name", "description", description);
@@ -28,12 +31,12 @@ export default {
       html = meta(html, "name", "twitter:title", title);
       html = meta(html, "name", "twitter:description", description);
       html = html.replace("<meta name=\"twitter:card\" content=\"summary\" />", [
-        "<meta name=\"twitter:card\" content=\"summary\" />",
+        "<meta name=\"twitter:card\" content=\"summary_large_image\" />",
         `<meta property="og:url" content="${escape(link)}" />`,
         `<meta property="og:image" content="${escape(image)}" />`,
-        "<meta property=\"og:image:width\" content=\"1024\" />",
-        "<meta property=\"og:image:height\" content=\"1024\" />",
+        `<meta property="og:image:alt" content="${escape(alt)}" />`,
         `<meta name="twitter:image" content="${escape(image)}" />`,
+        `<meta name="twitter:image:alt" content="${escape(alt)}" />`,
       ].join("\n    "));
     }
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" } });

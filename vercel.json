@@ -4,20 +4,23 @@
       "maxDuration": 300
     }
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/",
+      "src": "/",
       "has": [
         {
           "type": "query",
           "key": "piece"
         }
       ],
-      "destination": "/api/share"
+      "dest": "/api/share"
     },
     {
-      "source": "/api/import/:path*",
-      "destination": "/api/index"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/api/import/(.*)",
+      "dest": "/api/index"
     }
   ]
 }
